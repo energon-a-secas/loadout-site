@@ -1,0 +1,11 @@
+# Loadout
+
+> RPG-styled team meeting-load planner — drag people onto weekly meeting blocks and spot overload before it happens
+
+- Live: https://loadout.neorgon.com/
+- Part of the Neorgon tool suite (free, no signup, runs in your browser): https://neorgon.com/
+
+## More Neorgon tools
+
+- [Neorgon hub](https://neorgon.com/): Browse and launch every tool from one page.
+- [Full suite index](https://neorgon.com/llms.txt): Machine-readable list of every Neorgon tool.
