@@ -169,63 +169,11 @@ main#main {
   gap: var(--space-2);
 }
 
-/* ── Header ────────────────────────────────────────────────── */
-.header-bar {
-  background: linear-gradient(in oklch 135deg, #B015B0 0%, #3D0080 50%, #040714 100%);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 0 var(--space-6);
-  height: 68px;
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky-header);
-  display: flex;
-  align-items: center;
-}
-
-.header-logo { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-
-.header-logo-img {
-  height: 36px; width: auto; flex-shrink: 0;
-  filter: brightness(0) invert(1);
-  transition: transform 0.3s var(--ease-snap);
-  display: block;
-}
-.header-logo-img:hover { transform: scale(1.14) rotate(-9deg); }
-
-.header-title-link { text-decoration: none; color: inherit; }
-.header-logo h1 { font-size: 1.2em; font-weight: 600; color: var(--text-primary); letter-spacing: .5px; }
-.header-subtitle { font-size: .82em; color: rgba(255,255,255,.72); font-weight: 500; margin-top: 3px; }
-
-/* ── Nav & Auth ────────────────────────────────────────────── */
-/*
- * THREE PATTERNS:
- *   A) No nav, no auth → margin-left: auto on .header-home
- *   B) Auth only       → margin-left: auto on .auth-toggle, margin-left: 8px on .header-home
- *   C) Nav + auth      → margin-left: auto on <nav>, margin-left: 5px on .header-home
- */
-/* Pattern C: nav + home icon. Nav gets margin-left:auto (pushes the whole
-   control cluster right); the home icon sits tight against the buttons. */
-nav {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-left: auto;
-}
-
-.header-home {
-  display: flex; align-items: center; justify-content: center;
-  min-width: var(--control-height);
-  min-height: var(--control-height);
-  padding: var(--space-2);
-  color: rgba(255,255,255,0.9); text-decoration: none;
-  border-radius: var(--radius-sm);
-  transition: color var(--dur), background var(--dur);
-  flex-shrink: 0;
-}
-nav .header-home { margin-left: 5px; }
-.header-home:hover { color: #fff; background: rgba(255,255,255,0.12); }
-.header-home svg { width: 34px; height: 34px; display: block; }
+/* ── Header ──────────────────────────────────────────────────
+   Bar, logo, home icon, mobile collapse, and theme switcher come
+   from the Neorgon Header Kit (css/neorgon-header.css, app mode:
+   slim + auto-hides on scroll). Site keeps only .nav-link styles
+   (Buttons section below). */
 
 /* ── Buttons (canonical) ─────────────────────────────────────
  * Use .btn + a variant. Aliases: .nav-link = toolbar ghost; .auth-* map below.
@@ -671,7 +619,6 @@ button:active,
 
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 600px) {
-  .header-bar { padding: 0 var(--space-4); }
   .container { padding: var(--space-4); }
   .toast {
     left: var(--space-4);
