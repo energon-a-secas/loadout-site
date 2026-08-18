@@ -1,3 +1,12 @@
+// escHtml and debounce come from the DOM Kit (js/neorgon-dom.js). This
+// site's showToast is left alone: it creates and removes its own element
+// rather than toggling a class, which the kit's contract does not cover.
+//
+// Do not edit js/neorgon-dom.js. Edit packages/neorgon-ui/dom/ and run
+// packages/neorgon-ui/sync-dom.sh.
+import { escHtml, debounce } from './neorgon-dom.js';
+export { escHtml, debounce };
+
 // ════════════════════════════════════════════════════════════
 //  utils.js — Small shared helpers (adapted from pathfinder-site)
 // ════════════════════════════════════════════════════════════
@@ -10,16 +19,7 @@ export function genId() { return (Date.now().toString(36) + (++_sid).toString(36
 // ── Pure helpers ─────────────────────────────────────────────
 export function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 
-export function escHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
 
-export function debounce(fn, ms) {
-  let t
-  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms) }
-}
 
 // Two-letter initials from a name for the character chip.
 export function initials(name) {
