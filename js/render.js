@@ -29,7 +29,7 @@ export function renderWeekTabs() {
     const count = state.meetings.filter(m => m.weekId === w.id).length
     return `
       <button class="week-tab ${active ? 'week-tab--active' : ''}" data-week="${w.id}"
-              title="${escHtml(w.label)} — ${count} meeting${count === 1 ? '' : 's'}"
+              title="${escHtml(w.label)}: ${count} meeting${count === 1 ? '' : 's'}"
               aria-pressed="${active}">
         <span class="week-tab-label" data-rename-week="${w.id}">${escHtml(w.label)}</span>
         ${count ? `<span class="week-tab-count">${count}</span>` : ''}
@@ -68,7 +68,7 @@ export function renderRoster() {
       <div class="chip ${picked ? 'chip--picked' : ''}" data-person="${p.id}"
            draggable="false" tabindex="0" role="button"
            aria-label="${escHtml(p.name)}, ${multi ? `averaging ${avg.toFixed(1)} hours a week` : `${avg.toFixed(1)} hours`}, ${wkHours.toFixed(1)} this week in ${wkCount} meetings. ${picked ? 'Picked up. Press Enter on a meeting to seat.' : 'Press Enter to pick up.'}"
-           title="${escHtml(p.name)} — ${avgLabel}/wk${multi ? ` · this week ${fmtHours(wkHours)}` : ''} across ${wkCount} meeting${wkCount === 1 ? '' : 's'}">
+           title="${escHtml(p.name)}: ${avgLabel}/wk${multi ? ` · this week ${fmtHours(wkHours)}` : ''} across ${wkCount} meeting${wkCount === 1 ? '' : 's'}">
         <span class="chip-ring" style="--ring-deg:${deg}deg; --ring-color:${ringColor}; --class-color:${p.color}">
           <span class="chip-avatar" style="--class-color:${p.color}">${escHtml(initials(p.name))}</span>
         </span>
@@ -183,7 +183,7 @@ function bottleFor(p) {
   const over = fill > 1
   const multi = state.weeks.length > 1
   return `
-    <div class="bottle ${over ? 'bottle--over' : ''}" title="${escHtml(p.name)} — ${multi ? 'avg ' : ''}${fmtHours(avg)} of ${state.settings.thresholdHours}h">
+    <div class="bottle ${over ? 'bottle--over' : ''}" title="${escHtml(p.name)}, ${multi ? 'avg ' : ''}${fmtHours(avg)} of ${state.settings.thresholdHours}h">
       <div class="bottle-glass">
         <div class="bottle-liquid bottle-liquid--${band}" style="height:${Math.min(pct, 100)}%"></div>
         <div class="bottle-threshold" aria-hidden="true"></div>
