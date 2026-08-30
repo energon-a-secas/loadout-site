@@ -4,6 +4,7 @@
 
 - Live: https://loadout.neorgon.com/
 - Part of the Neorgon tool suite (free, no signup, runs in your browser): https://neorgon.com/
+- Keywords: meetings, workload, scheduling, team
 
 ## More Neorgon tools
 
