@@ -364,7 +364,7 @@ body.dragging-person .day-drop, body.picking .day-drop { background: rgba(255,25
 .block-title {
   font-family: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--text-primary);
   background: none; border: none; padding: 2px 0; text-align: left; border-radius: 4px;
-  cursor: text; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: text; flex: 1; min-width: 0; min-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .block-title-input {
   flex: 1; min-width: 0; font-family: inherit; font-size: var(--text-sm); font-weight: 600;
@@ -400,7 +400,8 @@ body.dragging-person .day-drop, body.picking .day-drop { background: rgba(255,25
 .seat--land { animation: seat-land .45s var(--ease-snap); }
 @keyframes seat-land { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
 .seat-x {
-  position: absolute; top: -7px; right: -7px; width: 20px; height: 20px;
+  /* 24px: the WCAG 2.5.8 minimum target, on a mouse too. */
+  position: absolute; top: -8px; right: -8px; width: 24px; height: 24px;
   border-radius: 50%; border: none; background: var(--load-red); color: #fff;
   font-size: var(--text-xs); line-height: 1; cursor: pointer; display: grid; place-items: center;
   opacity: 0; transition: opacity var(--dur);
@@ -522,7 +523,7 @@ body.drawer-open .drawer-scrim { opacity: 1; pointer-events: auto; }
 .insight--high .insight-dot { color: var(--load-red); }
 .insight--medium .insight-dot { color: var(--load-amber); }
 .insight--low .insight-dot { color: var(--load-green); }
-.insight-title { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
+.insight-title { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
 .insight-detail { font-size: var(--text-xs); color: var(--text-muted); line-height: 1.5; margin-top: 2px; }
 
 /* ── Toast (pathfinder-style, distinct from template .toast) ── */
@@ -533,6 +534,9 @@ body.drawer-open .drawer-scrim { opacity: 1; pointer-events: auto; }
   background: var(--surface-toast); color: var(--text-primary);
   border: 1px solid var(--border); box-shadow: var(--shadow-card);
   font-size: var(--text-sm); opacity: 0; transition: opacity .2s, transform .2s;
+  overflow-wrap: anywhere;
+  /* It holds no controls, so a tap on the faces under it still lands. */
+  pointer-events: none;
 }
 .toast-notification.visible { opacity: 1; transform: translate(-50%, 0); }
 .toast-error { border-color: var(--load-red); }
@@ -548,7 +552,9 @@ body.drawer-open .drawer-scrim { opacity: 1; pointer-events: auto; }
     position: sticky; bottom: calc(-1 * var(--space-4)); margin-bottom: calc(-1 * var(--space-4)); padding-bottom: var(--space-4);
     background: var(--surface-1); box-shadow: 0 -14px 14px -6px var(--surface-1);
   }
-  .board { grid-template-columns: repeat(5, minmax(140px, 1fr)); }
+  /* Wide enough that a block seats four faces on one row at phone width. */
+  .board { grid-template-columns: repeat(5, minmax(184px, 1fr)); }
+  .day { min-width: 184px; }
   .strip-hint { display: none; }
 }
 
@@ -564,11 +570,15 @@ body.drawer-open .drawer-scrim { opacity: 1; pointer-events: auto; }
 @media (pointer: coarse) {
   .chip-remove { width: var(--target); height: var(--target); }
   .block-x { width: 36px; height: 36px; }
+  /* Rename: as tall as the delete beside it, so the head row does not grow. */
+  .block-title { min-height: 36px; }
   .chiplet { min-height: 36px; padding: 0 12px; }
   /* 26px drawn, 44px to the finger: the ::after reaches past it. */
   .seat-x { width: 26px; height: 26px; top: -13px; right: -13px; }
   .seat-x::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; }
-  .block-seats { gap: 12px; padding-top: 6px; }
+  /* Rows stay apart for the badge; faces sit closer, and an armed face is drawn over its neighbour. */
+  .block-seats { gap: 12px 8px; padding-top: 6px; }
+  .seat--armed { z-index: 1; }
 }
 
 /* Empty-state actions */
