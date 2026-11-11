@@ -296,6 +296,73 @@ for (const eng of engines) {
     await phone.close()
   }
 
+  // 9. The #154 minors: a save flushed on reload, a large team asked about,
+  //    a hidden remove that keeps the name whole, and hours in the visitor's format.
+  {
+    const page = await ctx.newPage()
+    const errors = [], dialogs = []
+    let answer = false
+    page.on('pageerror', (e) => errors.push(e.message))
+    page.on('dialog', (d) => { dialogs.push(d.message()); answer ? d.accept() : d.dismiss() })
+    await retry(() => page.goto(TOOL + '/'))
+    await page.evaluate(() => localStorage.removeItem('loadout-v1'))
+    await reload(page)
+    // An edit within the 300ms debounce, then straight into a reload.
+    await page.fill('#personName', 'Just Before Reload')
+    await page.press('#personName', 'Enter')
+    await reload(page)
+    await page.waitForSelector('.chip', { timeout: 3000 }).catch(() => {})
+    check(eng, 'an edit made just before a reload is kept', (await page.locator('.chip-name', { hasText: 'Just Before Reload' }).count()) === 1)
+
+    // A hidden remove holds no width: the name runs to the chip's edge at 1440.
+    await page.fill('#personName', 'Maximiliana Fernandez-Gutierrez')
+    await page.press('#personName', 'Enter')
+    await page.mouse.move(900, 600)
+    const chip = page.locator('.chip').last()
+    const fit = await chip.evaluate((c) => {
+      const main = c.querySelector('.chip-main').getBoundingClientRect(), box = c.getBoundingClientRect()
+      return { gap: Math.round(box.right - main.right), rail: Math.round(document.querySelector('.roster').getBoundingClientRect().width) }
+    })
+    if (process.env.LO_SHOTS) await page.locator('.roster').screenshot({ path: process.env.LO_SHOTS + `/${eng}-roster-1440.png` })
+    check(eng, '1440: a hidden remove does not narrow the name', fit.gap <= 12, JSON.stringify(fit))
+    await chip.hover()
+    await page.waitForTimeout(400) // the opacity transition
+    const shown = await chip.locator('.chip-remove').evaluate((b) => {
+      const r = b.getBoundingClientRect(), c = b.closest('.chip').getBoundingClientRect()
+      return getComputedStyle(b).opacity === '1' && r.right <= c.right && r.width >= 24
+    })
+    if (process.env.LO_SHOTS) await page.locator('.roster').screenshot({ path: process.env.LO_SHOTS + `/${eng}-roster-1440-hover.png` })
+    check(eng, '1440: on hover the remove shows inside the chip', shown)
+
+    // A 400-person team asks first and says how many; declining adds nobody.
+    const big = { v: 1, people: Array.from({ length: 400 }, (_, i) => ({ id: 'big-' + i, name: 'Big ' + i })),
+      teams: [{ id: 'everyone', name: 'Everyone', members: Array.from({ length: 400 }, (_, i) => ({ person: 'big-' + i })) }] }
+    const before = await page.locator('.chip').count()
+    await page.evaluate(async (w) => { (await import('/js/settings.js')).addTeam(w) }, big)
+    check(eng, 'a 400-person team asks first, with the count', dialogs.length === 1 && /\b400 people\b/.test(dialogs[0]), dialogs.join(' | '))
+    check(eng, 'declining adds nobody', (await page.locator('.chip').count()) === before)
+    answer = true
+    await page.evaluate(async (w) => { (await import('/js/settings.js')).addTeam(w) }, big)
+    check(eng, 'accepting adds the team', (await page.locator('.chip').count()) === before + 400)
+    const small = { v: 1, people: [{ id: 'one', name: 'Only One' }], teams: [{ id: 't', name: 'T', members: [{ person: 'one' }] }] }
+    await page.evaluate(async (w) => { (await import('/js/settings.js')).addTeam(w) }, small)
+    check(eng, 'a small team adds with no question', dialogs.length === 2 && (await page.locator('.chip').count()) === before + 401)
+
+    // The weekly hours text follows the time format.
+    for (const [c, want] of [['h12', '9:00 am to 5:30 pm'], ['h23', '09:00 to 17:30']]) {
+      await page.evaluate((k) => { document.cookie = k }, W.meCookie({ h: [540, 1050], d: '12345', c }, LOCAL))
+      await reload(page)
+      await page.waitForSelector('.neo-ws-gear')
+      await page.keyboard.press(',')
+      const note = await page.locator('dialog[open] .neo-ws-note', { hasText: 'work week' }).textContent().catch(() => '')
+      check(eng, `weekly hours in the ${c} format`, note.includes(want), note)
+      await page.keyboard.press('Escape')
+    }
+    await page.evaluate((k) => { document.cookie = k; localStorage.removeItem('loadout-v1') }, W.clearCookie(W.COOKIE_ME, LOCAL))
+    check(eng, 'no page errors in the minors', !errors.length, errors.join('; '))
+    await page.close()
+  }
+
   // 8. Analytics on the production hosts (Chromium): no beacon can read a pick's answer.
   if (eng === 'chromium') {
     const prod = await browser.newContext({ viewport: { width: 1440, height: 900 } })

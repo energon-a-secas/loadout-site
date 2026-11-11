@@ -152,3 +152,33 @@ test('a Loadout chip merged by name never repaints the workspace person', () => 
   assert.deepEqual([merged.added, merged.updated], [[], []])
   assert.equal(merged.next.people[0].color, '#123456')
 })
+
+test('confirmAddText: asks only above 40 people, and says how many', async () => {
+  const { confirmAddText, CONFIRM_OVER } = await import('../js/team-adapter.js')
+  assert.equal(CONFIRM_OVER, 40)
+  const plan = n => ({ add: Array.from({ length: n }, (_, i) => ({ ws: 'p' + i })), teams: ['Everyone'] })
+  assert.equal(confirmAddText(plan(40)), null)
+  assert.equal(confirmAddText({ add: [], teams: [] }), null)
+  assert.equal(confirmAddText(null), null)
+  const q = confirmAddText(plan(400))
+  assert.match(q, /\b400 people from Everyone\b/)
+  assert.match(confirmAddText({ add: plan(41).add, teams: [] }), /^Add 41 people to this board\?/)
+  // planAdd on a 400-person team does produce a plan that asks.
+  const big = { v: 1, people: Array.from({ length: 400 }, (_, i) => ({ id: 'p' + i, name: 'P ' + i })), teams: [{ id: 'all', name: 'All', members: Array.from({ length: 400 }, (_, i) => ({ person: 'p' + i })) }] }
+  assert.match(confirmAddText(planAdd(big, [])), /^Add 400 people from All/)
+})
+
+test('fmtClock: follows the time format, the device when unset', async () => {
+  const { fmtClock } = await import('../js/team-adapter.js')
+  assert.equal(fmtClock(540, 'h23'), '09:00')
+  assert.equal(fmtClock(1050, 'h23'), '17:30')
+  assert.equal(fmtClock(1050, 'h12'), '5:30 pm')
+  assert.equal(fmtClock(540, 'h12'), '9:00 am')
+  assert.equal(fmtClock(0, 'h12'), '12:00 am')
+  assert.equal(fmtClock(720, 'h12'), '12:00 pm')
+  assert.equal(fmtClock(1440, 'h23'), '24:00')
+  assert.equal(fmtClock(1440, 'h12'), '12:00 am')
+  assert.equal(fmtClock(1050, '', 'h12'), '5:30 pm')
+  assert.equal(fmtClock(1050, '', 'h23'), '17:30')
+  assert.equal(fmtClock(1050, '', 'h11'), '5:30 pm')
+})

@@ -12,12 +12,17 @@
 import { NeoWorkspace } from './neorgon-workspace.js'
 import { state, addPerson, getPerson, snapshot, debouncedSave } from './state.js'
 import { render, renderInsights } from './render.js'
-import { planAdd, toWorkspace, weeklyHours } from './team-adapter.js'
+import { planAdd, toWorkspace, weeklyHours, confirmAddText, fmtClock } from './team-adapter.js'
 import { showToast } from './utils.js'
 import { cleanColor } from './validate.js'
 
 let ws = null
 let weekNote = null
+
+/** This device's hour cycle, for the "This device's" time format. */
+function deviceCycle() {
+  try { return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle || 'h23' } catch { return 'h23' }
+}
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
@@ -28,18 +33,20 @@ function applyPrefs() {
 function weekText() {
   const p = ws.prefs()
   const hours = weeklyHours(p, 40)
-  const fmt = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+  const fmt = m => fmtClock(m, p.c, deviceCycle())
   const span = Array.isArray(p.h) ? `${fmt(p.h[0])} to ${fmt(p.h[1])}` : 'your hours'
   const days = typeof p.d === 'string' ? p.d.length : 5
   return `Your work week is ${hours}h (${span}, ${plural(days, 'day', 'days')}), from the settings above. The Signals drawer measures each person's meetings against it.`
 }
 
-export function addTeam(workspace) {
+export function addTeam(workspace, ask = (q) => window.confirm(q)) {
   const plan = planAdd(workspace, state.people)
   if (!plan.add.length && !plan.link.length) {
     showToast(plan.kept ? 'Your team is already on the board' : 'Your workspace has nobody to add yet', 'info')
     return plan
   }
+  const question = confirmAddText(plan)
+  if (question && !ask(question)) return { ...plan, add: [], link: [], declined: true }
   snapshot()
   for (const l of plan.link) { const p = getPerson(l.id); if (p) { p.ws = l.ws; p.color = cleanColor(l.color) || p.color } }
   for (const a of plan.add) addPerson(a.name, { color: a.color, ws: a.ws })

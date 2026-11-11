@@ -11,6 +11,8 @@ import { cleanText, cleanColor, cleanNumber, LIMITS, WORK_HOURS } from './valida
 
 /** How many people "Add my team" brings onto a board when no team says who. */
 export const NO_TEAM_CAP = 40
+/** "Add my team" asks first when it would add more than this many people at once. */
+export const CONFIRM_OVER = 40
 const PREFIX = 'loadout-'
 
 /**
@@ -81,6 +83,32 @@ export function planAdd(rawWs, roster, cap = LIMITS.people) {
     room--
   }
   return { add, link, kept, teams, skipped: people.length - add.length - kept }
+}
+
+/**
+ * The question "Add my team" asks before a large add, or null when it need not ask.
+ * A whole organisation can land on a board in one press; this says how many first.
+ */
+export function confirmAddText(plan, over = CONFIRM_OVER) {
+  const n = plan && Array.isArray(plan.add) ? plan.add.length : 0
+  if (n <= over) return null
+  const from = plan.teams && plan.teams.length ? ` from ${plan.teams.join(', ')}` : ''
+  return `Add ${n} people${from} to this board? That is a large team for one board; you can remove people afterwards, or undo.`
+}
+
+/**
+ * A time of day (minutes since midnight) in the visitor's time format: 'h23'
+ * gives 17:30, 'h12' gives 5:30 pm, '' follows the locale (`deviceCycle`, which
+ * the caller reads from Intl so this stays pure). 1440 is the end of the day.
+ */
+export function fmtClock(minutes, c = '', deviceCycle = 'h23') {
+  const m = Math.max(0, Math.min(1440, Math.round(Number(minutes) || 0)))
+  const cycle = c === 'h12' || c === 'h23' ? c : (deviceCycle === 'h12' || deviceCycle === 'h11' ? 'h12' : 'h23')
+  const mm = String(m % 60).padStart(2, '0')
+  const hh = Math.floor(m / 60)
+  if (cycle === 'h23') return `${String(hh).padStart(2, '0')}:${mm}`
+  const h24 = hh % 24
+  return `${h24 % 12 || 12}:${mm} ${h24 < 12 ? 'am' : 'pm'}`
 }
 
 /** A Loadout person's id in the workspace: the one it came with, else `loadout-<id>`. */

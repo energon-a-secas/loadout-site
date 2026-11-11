@@ -279,6 +279,16 @@ main#main { flex: 1; min-height: 0; }
 }
 .chip:hover .chip-remove, .chip:focus-within .chip-remove { opacity: 1; }
 .chip-remove:hover { color: var(--load-red); background: rgba(244,63,94,.12); }
+/* With a mouse the remove button shows only on hover or focus, so it lies over the
+   chip's right edge instead of holding 32px of the 232px rail: a hidden button
+   no longer cuts the name. Shown, it wears the chip's hover surface so it reads. */
+@media (hover: hover) {
+  .chip-remove {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: var(--surface-2);
+  }
+  .chip-remove:hover { background: linear-gradient(rgba(244,63,94,.12), rgba(244,63,94,.12)), var(--surface-2); }
+}
 
 /* ── Board (Mon–Fri) ───────────────────────────────────────── */
 .board {

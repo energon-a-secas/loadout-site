@@ -4,7 +4,7 @@
 //  to a week (weekId). You view/edit one week at a time.
 // ════════════════════════════════════════════════════════════
 
-import { genId, debounce } from './utils.js'
+import { genId } from './utils.js'
 import { PRESETS, MEETING_TYPES, CLASS_COLORS } from './data.js'
 import { cleanState, cleanText, cleanColor, cleanType, cleanDay, LIMITS } from './validate.js'
 
@@ -168,7 +168,27 @@ export function saveState() {
     }))
   } catch (_) {}
 }
-export const debouncedSave = debounce(saveState, 300)
+// Saves wait 300ms so a burst of edits writes once. The wait is flushed when
+// the page is hidden or left (bindSaveFlush), or an edit made just before a
+// reload or a closed tab would be lost with its timer.
+let saveTimer = null
+export function debouncedSave() {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(flushSave, 300)
+}
+/** Write a pending save now. Returns true when one was pending. */
+export function flushSave() {
+  if (saveTimer === null) return false
+  clearTimeout(saveTimer)
+  saveTimer = null
+  saveState()
+  return true
+}
+/** Flush on pagehide (reload, close, bfcache) and when the tab is hidden (mobile kills it unannounced). */
+export function bindSaveFlush(win = window, doc = document) {
+  win.addEventListener('pagehide', flushSave)
+  doc.addEventListener('visibilitychange', () => { if (doc.visibilityState === 'hidden') flushSave() })
+}
 
 // Every stored value goes through cleanState (js/validate.js): ids, colours,
 // types, days, durations and settings are checked before anything renders.

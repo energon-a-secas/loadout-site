@@ -59,6 +59,9 @@ Persisted in this browser:
 - The Header Kit's analytics run only on `*.neorgon.com`, so the beacon check needs the routed production hosts in the browser test; a plain localhost run proves nothing about it.
 - **`js/app.js` loads before `neorgon-header.js` in `index.html`, and that order is the analytics rule.** Both are deferred, so they run in document order: the module's `NeoWorkspace.init` strips a pick's `#neo-ws=` answer before the Header Kit appends GoatCounter and Cloudflare's beacon. Rama, Floorplan, Reparto and Client Says hold the answer back with an inline script instead (`window.__neoWsAnswer`); Loadout needs none as long as the module stays first. Move the header script above it and the beacon sees the team.
 - A chip's `ws` is a hint, not a fact. The Workspace review may merge a saved chip into a person under that person's own id, so nothing writes `ws` at save time; `planAdd` treats a chip whose `ws` the workspace does not hold as loose and links it by its saved id (`loadout-<id>`), then by an unambiguous name.
+- Saves are debounced 300ms (`debouncedSave` in state.js) and flushed on `pagehide` and on a hidden tab (`bindSaveFlush`, called from app.js). A new save path calls `debouncedSave`, never its own timer, or a reload drops it again.
+- "Add my team" asks with `confirm()` before adding more than `CONFIRM_OVER` (40) people at once (`confirmAddText`); times in Settings go through `fmtClock`, which follows the Workspace time format (`neo_me.c`).
+- With a mouse, a chip's remove button is laid over the chip's right edge (`@media (hover: hover)`), so a hidden one holds no width in the 232px rail. On touch it stays in flow at 44px.
 - On touch, a meeting face's remove badge is hidden until that face is tapped (`armSeat` in events.js, `.seat--armed`); a badge on every face covered the initials.
 
 ## Do not touch
