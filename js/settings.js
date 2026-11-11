@@ -39,6 +39,9 @@ function weekText() {
   return `Your work week is ${hours}h (${span}, ${plural(days, 'day', 'days')}), from the settings above. The Signals drawer measures each person's meetings against it.`
 }
 
+// Long enough to read eleven words and find the gear: the only pointer to where the offer went.
+export const DECLINE_TOAST_MS = 7000
+
 export function addTeam(workspace, ask = (q) => window.confirm(q)) {
   const plan = planAdd(workspace, state.people)
   if (!plan.add.length && !plan.link.length) {
@@ -49,7 +52,7 @@ export function addTeam(workspace, ask = (q) => window.confirm(q)) {
   if (question && !ask(question)) {
     // The kit closes its banner (or the sheet) whatever this returns, so say
     // where the offer lives now: the Settings sheet keeps the button.
-    showToast('Nobody added. Add your team any time from Settings (press ,)', 'info')
+    showToast('Nobody added. Add your team any time from Settings (press ,)', 'info', DECLINE_TOAST_MS)
     return { ...plan, add: [], link: [], declined: true }
   }
   snapshot()

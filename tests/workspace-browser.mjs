@@ -26,9 +26,14 @@ const FRAME_PORT = Number(process.env.LO_FRAME_PORT || 9371)
 const TOOL = `http://localhost:${TOOL_PORT}`
 const FRAME = `http://localhost:${FRAME_PORT}`
 const servers = [[TOOL_PORT, SITE], [FRAME_PORT, join(ROOT, 'projects/neorgon-site')]]
-  .map(([port, dir]) => spawn('python3', [join(ROOT, 'scripts/serve.py'), String(port), dir], { stdio: 'ignore' }))
-const stop = () => servers.forEach((s) => s.kill())
+  .map(([port, dir]) => spawn('python3', [join(ROOT, 'scripts/serve.py'), String(port), dir], { stdio: 'ignore', detached: true }))
+// python3 can be a shim that starts the real server as its child, so kill the whole
+// process group, and on a crash or Ctrl-C as well as a clean exit.
+const stop = () => servers.forEach((s) => { try { process.kill(-s.pid, 'SIGTERM') } catch { s.kill() } })
 process.on('exit', stop)
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(130))
+process.on('uncaughtException', (err) => { console.error(err); process.exit(1) })
+process.on('unhandledRejection', (err) => { console.error(err); process.exit(1) })
 // Wait until both servers answer, then retry any load that still meets a refused connection.
 for (const port of [TOOL_PORT, FRAME_PORT]) {
   for (let i = 0; i < 50; i++) {
@@ -153,7 +158,8 @@ for (const eng of engines) {
       check(eng, 'a hostile workspace name is text, its colour refused', (await page.locator('img[src=x]').count()) === 0 && got.every((c) => /^#[0-9a-f]{6}$/.test(c.color)))
       // Again from the sheet: nobody twice.
       await page.keyboard.press(',')
-      await page.locator('dialog[open] .neo-ws-primary').click()
+      // The kit enables this button once the frame has answered with the team.
+      await page.locator('dialog[open] .neo-ws-primary:not([disabled])').click()
       await page.waitForTimeout(200)
       check(eng, 'a second Add my team adds nobody', (await page.locator('.chip').count()) === want.length)
       // Saved with the workspace id, so a reload keeps the link.
@@ -344,8 +350,11 @@ for (const eng of engines) {
       const r = b.getBoundingClientRect(), c = b.closest('.chip').getBoundingClientRect()
       const name = b.closest('.chip').querySelector('.chip-name').getBoundingClientRect()
       const bg = getComputedStyle(b).backgroundColor
-      const alpha = /rgba?\(([^)]+)\)/.exec(bg)?.[1].split(/[ ,/]+/).filter(Boolean)[3]
-      return { ok: getComputedStyle(b).opacity === '1' && r.right <= c.right && r.width >= 24 && name.right <= r.left && (alpha === undefined || Number(alpha) === 1),
+      // rgb(r g b), rgba(r, g, b, a) or color(srgb r g b / a): no alpha means opaque; unparsed fails.
+      const m = /^(?:rgba?|color)\(([^)]+)\)$/.exec(bg)
+      const parts = m ? m[1].replace(/^srgb\s+/, '').split(/[\s,/]+/).filter(Boolean) : []
+      const alpha = parts.length === 3 ? 1 : parts.length === 4 ? Number(parts[3]) : NaN
+      return { ok: getComputedStyle(b).opacity === '1' && r.right <= c.right && r.width >= 24 && name.right <= r.left && alpha === 1,
         name: Math.round(name.right), btn: Math.round(r.left), bg }
     }
     await chip.hover()
@@ -359,7 +368,42 @@ for (const eng of engines) {
     const focused = await chip.locator('.chip-remove').evaluate(covers)
     if (process.env.LO_SHOTS) await page.locator('.roster').screenshot({ path: process.env.LO_SHOTS + `/${eng}-roster-1440-focus.png` })
     check(eng, '1440: on focus the remove shows clear of the name', focused.ok, JSON.stringify(focused))
+    // The focus ring of the chip's main button stops before the remove.
+    const ring = await chip.evaluate((c) => {
+      const m = c.querySelector('.chip-main').getBoundingClientRect(), x = c.querySelector('.chip-remove').getBoundingClientRect()
+      return { mainRight: Math.round(m.right), ringRight: Math.round(m.right + 2 + 2), btn: Math.round(x.left) }
+    })
+    check(eng, '1440: the main button focus ring does not wrap the remove', ring.ringRight <= ring.btn, JSON.stringify(ring))
     await page.evaluate(() => document.activeElement && document.activeElement.blur())
+    // The shown remove's backing is opaque: an rgba or color() value with alpha below 1 fails.
+    check(eng, 'the opacity parser rejects a translucent color()', (await page.evaluate(() => {
+      const d = document.createElement('div'); d.style.background = 'color-mix(in srgb, #fff 6%, transparent)'; document.body.append(d)
+      const bg = getComputedStyle(d).backgroundColor; d.remove()
+      const m = /^(?:rgba?|color)\(([^)]+)\)$/.exec(bg)
+      const parts = m ? m[1].replace(/^srgb\s+/, '').split(/[\s,/]+/).filter(Boolean) : []
+      return parts.length === 4 && Number(parts[3]) < 1
+    })))
+    // A mouse press on the remove, top half or centre, removes the chip: the button
+    // stays put while held (no transform swap under the global button:active scale).
+    for (const at of [0.25, 0.5]) {
+      await page.fill('#personName', 'Press Target ' + at)
+      await page.press('#personName', 'Enter')
+      const target = page.locator('.chip', { hasText: 'Press Target ' + at })
+      const count = await page.locator('.chip').count()
+      await target.hover()
+      await page.waitForTimeout(400)
+      const box = await target.locator('.chip-remove').boundingBox()
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height * at)
+      await page.mouse.down()
+      await page.waitForTimeout(300)
+      const held = await target.locator('.chip-remove').boundingBox()
+      await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height * at)
+      await page.mouse.up()
+      await page.waitForTimeout(200)
+      check(eng, `1440: a mouse press at ${at * 100}% of the remove keeps it in place and removes the chip`,
+        Math.abs(held.y + held.height / 2 - (box.y + box.height / 2)) <= 1 && (await page.locator('.chip').count()) === count - 1,
+        JSON.stringify({ box, held, count, after: await page.locator('.chip').count() }))
+    }
 
     // A 400-person team asks first and says how many; declining adds nobody.
     const big = { v: 1, people: Array.from({ length: 400 }, (_, i) => ({ id: 'big-' + i, name: 'Big ' + i })),
@@ -369,6 +413,8 @@ for (const eng of engines) {
     check(eng, 'a 400-person team asks first, with the count', dialogs.length === 1 && /\b400 people\b/.test(dialogs[0]), dialogs.join(' | '))
     check(eng, 'declining adds nobody', (await page.locator('.chip').count()) === before)
     check(eng, 'declining says where the offer lives', /from Settings/.test(await page.locator('.toast-notification').textContent().catch(() => '')))
+    await page.waitForTimeout(3500)
+    check(eng, 'the decline toast is still up after 3.5s', await page.locator('.toast-notification.visible', { hasText: 'from Settings' }).isVisible())
     answer = true
     await page.evaluate(async (w) => { (await import('/js/settings.js')).addTeam(w) }, big)
     check(eng, 'accepting adds the team', (await page.locator('.chip').count()) === before + 400)

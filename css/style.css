@@ -283,14 +283,21 @@ main#main { flex: 1; min-height: 0; }
    chip's right edge instead of holding 32px of the 232px rail: a hidden button
    no longer cuts the name. While it shows, the name gives way (the padding below)
    so the ellipsis ends before the button and nothing is drawn under it; the
-   button's own backing is opaque, so it stays solid in forced colors too. */
+   button's own backing is opaque, so it stays solid in forced colors too.
+   Centred with auto margins, not a transform: the global button:active scale
+   would replace a translate and drop the button 16px under the pointer mid-press.
+   The name gives way with a margin, not padding, so the main button's focus
+   ring stops before the remove instead of wrapping it.
+   The backing matches the chip it sits on: about 6% white at rest (surface-1
+   over the rail), about 9% on a hovered chip (surface-2 over the rail). */
 @media (hover: hover) {
   .chip-remove {
-    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    position: absolute; right: 6px; top: 0; bottom: 0; margin: auto 0;
     background-color: color-mix(in srgb, #fff 6%, var(--bg));
   }
-  .chip:hover .chip-main, .chip:focus-within .chip-main { padding-right: 34px; }
-  .chip-remove:hover { background-color: color-mix(in srgb, #f43f5e 12%, color-mix(in srgb, #fff 6%, var(--bg))); }
+  .chip:hover .chip-remove { background-color: color-mix(in srgb, #fff 9%, var(--bg)); }
+  .chip:hover .chip-main, .chip:focus-within .chip-main { margin-right: 34px; }
+  .chip .chip-remove:hover { background-color: color-mix(in srgb, #f43f5e 12%, color-mix(in srgb, #fff 9%, var(--bg))); }
 }
 
 /* ── Board (Mon–Fri) ───────────────────────────────────────── */
