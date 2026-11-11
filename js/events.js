@@ -13,6 +13,7 @@ import { TYPE_ORDER, MEETING_TYPES, RECURRENCE } from './data.js'
 import { render, renderRoster, renderInsights, renderSettings } from './render.js'
 import { $, showToast, initials, escHtml } from './utils.js'
 import { personHoursInWeek, fillFor } from './load.js'
+import { cleanColor, cleanText, LIMITS } from './validate.js'
 
 // Common re-render + persist after a mutation.
 function commit() {
@@ -53,7 +54,7 @@ function onPointerMove(e) {
     const p = getPerson(drag.personId)
     const ghost = document.createElement('div')
     ghost.className = 'drag-ghost'
-    ghost.style.setProperty('--class-color', p?.color || '#fff')
+    ghost.style.setProperty('--class-color', cleanColor(p?.color) || '#94a3b8')
     ghost.textContent = initials(p?.name)
     document.body.appendChild(ghost)
     drag.ghost = ghost
@@ -263,7 +264,7 @@ function editTitle(meetingId, el) {
   input.maxLength = 40
   el.replaceWith(input)
   input.focus(); input.select()
-  const done = () => { m.title = input.value.trim(); commit() }
+  const done = () => { m.title = cleanText(input.value, LIMITS.title); commit() }
   input.addEventListener('blur', done, { once: true })
   input.addEventListener('keydown', ev => {
     if (ev.key === 'Enter') { ev.preventDefault(); input.blur() }

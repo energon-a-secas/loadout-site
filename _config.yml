@@ -14,6 +14,8 @@ exclude:
   - "*.mkdn"
   - "*.mkd"
   - CNAME
+  - tests
+  - package.json
   - Gemfile
   - Gemfile.lock
   - node_modules

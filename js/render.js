@@ -10,6 +10,14 @@ import {
   personMeetingCountInWeek, meetingWeeklyHours, dayHours,
 } from './load.js'
 import { computeInsights } from './insights.js'
+import { cleanColor } from './validate.js'
+
+// Every interpolated value is escaped, ids and numbers included: state is
+// validated on load, and this is the second wall, not the first.
+const esc = escHtml
+const NEUTRAL = '#94a3b8'
+const colorOf = (p) => cleanColor(p && p.color) || NEUTRAL
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 
 export function render() {
   renderWeekTabs()
@@ -28,12 +36,12 @@ export function renderWeekTabs() {
     const active = w.id === state.currentWeekId
     const count = state.meetings.filter(m => m.weekId === w.id).length
     return `
-      <button class="week-tab ${active ? 'week-tab--active' : ''}" data-week="${w.id}"
+      <button class="week-tab ${active ? 'week-tab--active' : ''}" data-week="${esc(w.id)}"
               title="${escHtml(w.label)}: ${count} meeting${count === 1 ? '' : 's'}"
               aria-pressed="${active}">
-        <span class="week-tab-label" data-rename-week="${w.id}">${escHtml(w.label)}</span>
+        <span class="week-tab-label" data-rename-week="${esc(w.id)}">${escHtml(w.label)}</span>
         ${count ? `<span class="week-tab-count">${count}</span>` : ''}
-        ${active && multi ? `<span class="week-tab-x" data-remove-week="${w.id}" role="button" aria-label="Delete ${escHtml(w.label)}">×</span>` : ''}
+        ${active && multi ? `<span class="week-tab-x" data-remove-week="${esc(w.id)}" role="button" aria-label="Delete ${escHtml(w.label)}">×</span>` : ''}
       </button>`
   }).join('') + `
     <button class="week-add" id="dupWeekBtn" title="Duplicate current week">⧉ Duplicate</button>
@@ -65,19 +73,19 @@ export function renderRoster() {
     const ringColor = band === 'green' ? 'var(--load-green)' : band === 'amber' ? 'var(--load-amber)' : 'var(--load-red)'
     const avgLabel = multi ? `avg ${fmtHours(avg)}` : fmtHours(avg)
     return `
-      <div class="chip ${picked ? 'chip--picked' : ''}" data-person="${p.id}"
+      <div class="chip ${picked ? 'chip--picked' : ''}" data-person="${esc(p.id)}"
            draggable="false" tabindex="0" role="button"
            aria-label="${escHtml(p.name)}, ${multi ? `averaging ${avg.toFixed(1)} hours a week` : `${avg.toFixed(1)} hours`}, ${wkHours.toFixed(1)} this week in ${wkCount} meetings. ${picked ? 'Picked up. Press Enter on a meeting to seat.' : 'Press Enter to pick up.'}"
            title="${escHtml(p.name)}: ${avgLabel}/wk${multi ? ` · this week ${fmtHours(wkHours)}` : ''} across ${wkCount} meeting${wkCount === 1 ? '' : 's'}">
-        <span class="chip-ring" style="--ring-deg:${deg}deg; --ring-color:${ringColor}; --class-color:${p.color}">
-          <span class="chip-avatar" style="--class-color:${p.color}">${escHtml(initials(p.name))}</span>
+        <span class="chip-ring" style="--ring-deg:${deg}deg; --ring-color:${ringColor}; --class-color:${colorOf(p)}">
+          <span class="chip-avatar" style="--class-color:${colorOf(p)}">${escHtml(initials(p.name))}</span>
         </span>
         <span class="chip-meta">
           <span class="chip-name">${escHtml(p.name)}</span>
           <span class="chip-load chip-load--${band}">${avgLabel} · ${wkCount} mtg${wkCount === 1 ? '' : 's'}</span>
         </span>
         ${band === 'red' ? '<span class="chip-pip" aria-hidden="true">!</span>' : ''}
-        <button class="chip-remove" data-remove-person="${p.id}" aria-label="Remove ${escHtml(p.name)}" title="Remove">×</button>
+        <button class="chip-remove" data-remove-person="${esc(p.id)}" aria-label="Remove ${escHtml(p.name)}" title="Remove">×</button>
       </div>`
   }).join('')
 }
@@ -112,25 +120,25 @@ function renderBlock(m) {
   const seats = m.attendees.map(id => {
     const p = state.people.find(pp => pp.id === id)
     if (!p) return ''
-    return `<span class="seat" style="--class-color:${p.color}" title="${escHtml(p.name)}" data-seat="${m.id}:${p.id}">${escHtml(initials(p.name))}<button class="seat-x" data-unseat="${m.id}:${p.id}" aria-label="Remove ${escHtml(p.name)}">×</button></span>`
+    return `<span class="seat" style="--class-color:${colorOf(p)}" title="${escHtml(p.name)}" data-seat="${esc(m.id)}:${esc(p.id)}">${escHtml(initials(p.name))}<button class="seat-x" data-unseat="${esc(m.id)}:${esc(p.id)}" aria-label="Remove ${escHtml(p.name)}">×</button></span>`
   }).join('')
   const oversized = m.attendees.length > t.cap
   return `
-    <article class="block ${oversized ? 'block--oversized' : ''}" data-meeting="${m.id}" data-type="${m.type}"
+    <article class="block ${oversized ? 'block--oversized' : ''}" data-meeting="${esc(m.id)}" data-type="${esc(m.type)}"
              tabindex="0" role="group"
-             style="--type-color:${t.color}" aria-label="${escHtml(m.title || t.label)} meeting, ${m.attendees.length} attending. When a teammate is picked up, press Enter to seat them here.">
+             style="--type-color:${cleanColor(t.color) || NEUTRAL}" aria-label="${escHtml(m.title || t.label)} meeting, ${m.attendees.length} attending. When a teammate is picked up, press Enter to seat them here.">
       <span class="block-notch" aria-hidden="true"></span>
       <div class="block-head">
         <span class="block-glyph" aria-hidden="true">${t.glyph}</span>
-        <span class="block-title" data-edit-title="${m.id}" title="Click to rename">${escHtml(m.title || t.label)}</span>
-        <button class="block-x" data-remove-meeting="${m.id}" aria-label="Delete meeting">×</button>
+        <span class="block-title" data-edit-title="${esc(m.id)}" title="Click to rename">${escHtml(m.title || t.label)}</span>
+        <button class="block-x" data-remove-meeting="${esc(m.id)}" aria-label="Delete meeting">×</button>
       </div>
       <div class="block-meta">
-        <button class="chiplet" data-cycle-dur="${m.id}" title="Click to change duration">${m.durationMin}m</button>
-        <button class="chiplet" data-cycle-rec="${m.id}" title="Click to change cadence">${rec.short}</button>
+        <button class="chiplet" data-cycle-dur="${esc(m.id)}" title="Click to change duration">${num(m.durationMin)}m</button>
+        <button class="chiplet" data-cycle-rec="${esc(m.id)}" title="Click to change cadence">${rec.short}</button>
         <span class="chiplet chiplet--ghost" title="Weekly cost per attendee">${fmtHours(perHead)}/head</span>
       </div>
-      <div class="block-seats" data-seats="${m.id}">
+      <div class="block-seats" data-seats="${esc(m.id)}">
         ${seats || '<span class="seats-empty">drag people here</span>'}
       </div>
       <span class="block-tab" aria-hidden="true"></span>
@@ -170,7 +178,7 @@ export function renderInsights() {
     <div class="bottle-wall" aria-label="Team workload bottles">
       ${bottles || '<p class="roster-empty">Add people to see their workload.</p>'}
     </div>
-    ${state.people.length ? `<p class="wall-caption">${wallLabel} vs ${state.settings.thresholdHours}h threshold</p>` : ''}
+    ${state.people.length ? `<p class="wall-caption">${wallLabel} vs ${num(state.settings.thresholdHours)}h threshold</p>` : ''}
     <h3 class="drawer-subhead">Signals</h3>
     <ul class="insight-items">${items}</ul>`
 }
@@ -183,7 +191,7 @@ function bottleFor(p) {
   const over = fill > 1
   const multi = state.weeks.length > 1
   return `
-    <div class="bottle ${over ? 'bottle--over' : ''}" title="${escHtml(p.name)}, ${multi ? 'avg ' : ''}${fmtHours(avg)} of ${state.settings.thresholdHours}h">
+    <div class="bottle ${over ? 'bottle--over' : ''}" title="${escHtml(p.name)}, ${multi ? 'avg ' : ''}${fmtHours(avg)} of ${num(state.settings.thresholdHours)}h">
       <div class="bottle-glass">
         <div class="bottle-liquid bottle-liquid--${band}" style="height:${Math.min(pct, 100)}%"></div>
         <div class="bottle-threshold" aria-hidden="true"></div>

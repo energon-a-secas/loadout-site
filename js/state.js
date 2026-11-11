@@ -6,6 +6,7 @@
 
 import { genId, debounce } from './utils.js'
 import { PRESETS, MEETING_TYPES, CLASS_COLORS } from './data.js'
+import { cleanState, cleanText, cleanColor, cleanType, cleanDay, LIMITS } from './validate.js'
 
 export const STORAGE_KEY = 'loadout-v1'
 
@@ -33,12 +34,13 @@ export const ui = {
 
 // ── People ───────────────────────────────────────────────────
 let _colorIdx = 0
-export function addPerson(name) {
+export function addPerson(name, extra = {}) {
   const person = {
     id: genId(),
-    name: String(name).trim().slice(0, 40),
-    color: CLASS_COLORS[_colorIdx++ % CLASS_COLORS.length],
+    name: cleanText(String(name), LIMITS.name),
+    color: cleanColor(extra.color) || CLASS_COLORS[_colorIdx++ % CLASS_COLORS.length],
   }
+  if (extra.ws) person.ws = extra.ws
   state.people.push(person)
   return person
 }
@@ -85,7 +87,7 @@ export function removeWeek(weekId) {
 
 export function renameWeek(weekId, label) {
   const w = state.weeks.find(w => w.id === weekId)
-  if (w) w.label = String(label).trim().slice(0, 24) || w.label
+  if (w) w.label = cleanText(String(label), LIMITS.week) || w.label
 }
 
 export function setCurrentWeek(weekId) {
@@ -94,7 +96,8 @@ export function setCurrentWeek(weekId) {
 
 // ── Meetings ─────────────────────────────────────────────────
 export function addMeeting(day, type) {
-  const t = MEETING_TYPES[type] || MEETING_TYPES.custom
+  day = cleanDay(day); type = cleanType(type)
+  const t = MEETING_TYPES[type]
   const meeting = {
     id: genId(),
     weekId: state.currentWeekId,
@@ -167,40 +170,20 @@ export function saveState() {
 }
 export const debouncedSave = debounce(saveState, 300)
 
+// Every stored value goes through cleanState (js/validate.js): ids, colours,
+// types, days, durations and settings are checked before anything renders.
 export function loadState() {
+  let data
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return
-    const data = JSON.parse(raw)
-
-    if (Array.isArray(data.people)) state.people = data.people
-
-    // Weeks — migrate pre-multi-week saves by synthesizing a single week.
-    state.weeks = (Array.isArray(data.weeks) && data.weeks.length)
-      ? data.weeks
-      : [makeWeek('Week 1')]
-    const firstWeekId = state.weeks[0].id
-
-    if (Array.isArray(data.meetings)) {
-      state.meetings = data.meetings.map(m => ({
-        id: m.id || genId(),
-        weekId: m.weekId && state.weeks.some(w => w.id === m.weekId) ? m.weekId : firstWeekId,
-        day: m.day || 'mon',
-        type: m.type || 'custom',
-        title: m.title || '',
-        durationMin: Number(m.durationMin) || (MEETING_TYPES[m.type]?.defaultMin ?? 30),
-        recurrence: m.recurrence || (MEETING_TYPES[m.type]?.defaultRecurrence ?? 'weekly'),
-        attendees: Array.isArray(m.attendees) ? m.attendees : [],
-      }))
-    }
-
-    state.currentWeekId = data.currentWeekId && state.weeks.some(w => w.id === data.currentWeekId)
-      ? data.currentWeekId
-      : firstWeekId
-
-    if (data.settings) Object.assign(state.settings, data.settings)
-    _colorIdx = state.people.length // keep the color cursor ahead of restored people
-  } catch (_) {}
+    if (!raw) return false
+    data = JSON.parse(raw)
+  } catch (_) { return false }
+  const clean = cleanState(data, { makeId: genId, fallbackColor: i => CLASS_COLORS[i % CLASS_COLORS.length] })
+  if (!clean) return false
+  Object.assign(state, clean)
+  _colorIdx = state.people.length // keep the color cursor ahead of restored people
+  return true
 }
 
 // ── Undo history (snapshot on structural change) ─────────────
