@@ -313,6 +313,19 @@ for (const eng of engines) {
     await reload(page)
     await page.waitForSelector('.chip', { timeout: 3000 }).catch(() => {})
     check(eng, 'an edit made just before a reload is kept', (await page.locator('.chip-name', { hasText: 'Just Before Reload' }).count()) === 1)
+    // An edit within the debounce, then the tab closed at once. Firefox is left
+    // out: Playwright's close there can end the content process before its
+    // localStorage write reaches the parent, which a real closed tab does not do.
+    if (eng !== 'firefox') {
+      const other = await ctx.newPage()
+      await retry(() => other.goto(TOOL + '/'))
+      await other.fill('#personName', 'Just Before Close')
+      await other.press('#personName', 'Enter')
+      await other.close({ runBeforeUnload: true })
+      await page.waitForTimeout(300)
+      await reload(page)
+      check(eng, 'an edit made just before a tab closes is kept', (await page.locator('.chip-name', { hasText: 'Just Before Close' }).count()) === 1)
+    }
 
     // A hidden remove holds no width: the name runs to the chip's edge at 1440.
     await page.fill('#personName', 'Maximiliana Fernandez-Gutierrez')
@@ -325,14 +338,28 @@ for (const eng of engines) {
     })
     if (process.env.LO_SHOTS) await page.locator('.roster').screenshot({ path: process.env.LO_SHOTS + `/${eng}-roster-1440.png` })
     check(eng, '1440: a hidden remove does not narrow the name', fit.gap <= 12, JSON.stringify(fit))
+    // Shown (hover, or keyboard focus), the remove sits inside the chip on an
+    // opaque backing and the name ends before it, so nothing is drawn under it.
+    const covers = (b) => {
+      const r = b.getBoundingClientRect(), c = b.closest('.chip').getBoundingClientRect()
+      const name = b.closest('.chip').querySelector('.chip-name').getBoundingClientRect()
+      const bg = getComputedStyle(b).backgroundColor
+      const alpha = /rgba?\(([^)]+)\)/.exec(bg)?.[1].split(/[ ,/]+/).filter(Boolean)[3]
+      return { ok: getComputedStyle(b).opacity === '1' && r.right <= c.right && r.width >= 24 && name.right <= r.left && (alpha === undefined || Number(alpha) === 1),
+        name: Math.round(name.right), btn: Math.round(r.left), bg }
+    }
     await chip.hover()
     await page.waitForTimeout(400) // the opacity transition
-    const shown = await chip.locator('.chip-remove').evaluate((b) => {
-      const r = b.getBoundingClientRect(), c = b.closest('.chip').getBoundingClientRect()
-      return getComputedStyle(b).opacity === '1' && r.right <= c.right && r.width >= 24
-    })
+    const shown = await chip.locator('.chip-remove').evaluate(covers)
     if (process.env.LO_SHOTS) await page.locator('.roster').screenshot({ path: process.env.LO_SHOTS + `/${eng}-roster-1440-hover.png` })
-    check(eng, '1440: on hover the remove shows inside the chip', shown)
+    check(eng, '1440: on hover the remove shows inside the chip, clear of the name', shown.ok, JSON.stringify(shown))
+    await page.mouse.move(900, 600)
+    await chip.locator('.chip-main').focus()
+    await page.waitForTimeout(400)
+    const focused = await chip.locator('.chip-remove').evaluate(covers)
+    if (process.env.LO_SHOTS) await page.locator('.roster').screenshot({ path: process.env.LO_SHOTS + `/${eng}-roster-1440-focus.png` })
+    check(eng, '1440: on focus the remove shows clear of the name', focused.ok, JSON.stringify(focused))
+    await page.evaluate(() => document.activeElement && document.activeElement.blur())
 
     // A 400-person team asks first and says how many; declining adds nobody.
     const big = { v: 1, people: Array.from({ length: 400 }, (_, i) => ({ id: 'big-' + i, name: 'Big ' + i })),
@@ -341,6 +368,7 @@ for (const eng of engines) {
     await page.evaluate(async (w) => { (await import('/js/settings.js')).addTeam(w) }, big)
     check(eng, 'a 400-person team asks first, with the count', dialogs.length === 1 && /\b400 people\b/.test(dialogs[0]), dialogs.join(' | '))
     check(eng, 'declining adds nobody', (await page.locator('.chip').count()) === before)
+    check(eng, 'declining says where the offer lives', /from Settings/.test(await page.locator('.toast-notification').textContent().catch(() => '')))
     answer = true
     await page.evaluate(async (w) => { (await import('/js/settings.js')).addTeam(w) }, big)
     check(eng, 'accepting adds the team', (await page.locator('.chip').count()) === before + 400)

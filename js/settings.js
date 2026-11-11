@@ -46,7 +46,12 @@ export function addTeam(workspace, ask = (q) => window.confirm(q)) {
     return plan
   }
   const question = confirmAddText(plan)
-  if (question && !ask(question)) return { ...plan, add: [], link: [], declined: true }
+  if (question && !ask(question)) {
+    // The kit closes its banner (or the sheet) whatever this returns, so say
+    // where the offer lives now: the Settings sheet keeps the button.
+    showToast('Nobody added. Add your team any time from Settings (press ,)', 'info')
+    return { ...plan, add: [], link: [], declined: true }
+  }
   snapshot()
   for (const l of plan.link) { const p = getPerson(l.id); if (p) { p.ws = l.ws; p.color = cleanColor(l.color) || p.color } }
   for (const a of plan.add) addPerson(a.name, { color: a.color, ws: a.ws })
