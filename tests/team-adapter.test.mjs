@@ -102,3 +102,33 @@ test('face: the kit colour and initials', () => {
   assert.equal(face({ name: 'Maya Chen', color: '#F87171' }).color, '#f87171')
   assert.match(face({ id: 'x', name: 'x', color: 'url(y)' }).color, /^#[0-9a-f]{6}$/)
 })
+
+test('planAdd after a save: a chip merged by name under another id is linked, not copied', () => {
+  const ws0 = normalizeWorkspace({ v: 1, me: { person: 'maya-chen' }, people: [{ id: 'maya-chen', name: 'Maya Chen' }, { id: 'kenji', name: 'Kenji Sato' }],
+    teams: [{ id: 't', name: 'T', lead: 'maya-chen', members: [{ person: 'kenji' }] }] }).ws
+  const roster = [{ id: 'abc1', name: 'Maya Chen', color: '#336699' }]
+  const saved = previewMerge(ws0, toWorkspace(roster))
+  assert.deepEqual(saved.added, [], 'the review matched her by name')
+  const plan = planAdd(saved.next, roster)
+  assert.deepEqual(plan.link, [{ id: 'abc1', ws: 'maya-chen' }])
+  assert.deepEqual(plan.add.map(a => a.ws), ['kenji'])
+  // A chip an older build tied to its made-up id (or "Not now") is loose, and links the same way.
+  const stale = planAdd(saved.next, [{ ...roster[0], ws: 'loadout-abc1' }])
+  assert.deepEqual(stale.link, [{ id: 'abc1', ws: 'maya-chen' }])
+  assert.equal(stale.add.length, 1)
+})
+
+test('planAdd after a save that added the chip: linked by the id it was saved under', () => {
+  const ws0 = normalizeWorkspace({ v: 1, people: [{ id: 'kenji', name: 'Kenji Sato' }], teams: [{ id: 't', name: 'T', members: [{ person: 'kenji' }] }] }).ws
+  const roster = [{ id: 'abc1', name: 'Maya Chen' }, { id: 'abc2', name: 'Maya Chen' }]
+  const next = previewMerge(ws0, toWorkspace(roster)).next
+  next.teams[0].members.push({ person: 'loadout-abc1' }, { person: 'loadout-abc2' })
+  const plan = planAdd(next, roster)
+  assert.deepEqual(plan.add.map(a => a.ws), ['kenji'], 'two homonyms are told apart by their saved ids')
+  assert.deepEqual(plan.link, [{ id: 'abc1', ws: 'loadout-abc1' }, { id: 'abc2', ws: 'loadout-abc2' }])
+})
+
+test('weeklyHours stays inside the range a reload accepts', () => {
+  assert.equal(weeklyHours({ h: [540, 555], d: '1' }), 1)
+  assert.equal(weeklyHours({ h: [0, 1439], d: '1234567' }), 168)
+})

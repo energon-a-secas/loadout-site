@@ -29,7 +29,22 @@ const servers = [[TOOL_PORT, SITE], [FRAME_PORT, join(ROOT, 'projects/neorgon-si
   .map(([port, dir]) => spawn('python3', [join(ROOT, 'scripts/serve.py'), String(port), dir], { stdio: 'ignore' }))
 const stop = () => servers.forEach((s) => s.kill())
 process.on('exit', stop)
-await new Promise((r) => setTimeout(r, 900))
+// Wait until both servers answer, then retry any load that still meets a refused connection.
+for (const port of [TOOL_PORT, FRAME_PORT]) {
+  for (let i = 0; i < 50; i++) {
+    try { await fetch(`http://localhost:${port}/`); break } catch { await new Promise((r) => setTimeout(r, 100)) }
+  }
+}
+const REFUSED = /CONNECTION_REFUSED|ECONNREFUSED|Could not connect|NS_ERROR_CONNECTION|ERR_CONNECTION/i
+async function retry(fn) {
+  for (let i = 0; ; i++) {
+    try { return await fn() } catch (err) {
+      if (i >= 4 || !REFUSED.test(String(err && err.message))) throw err
+      await new Promise((r) => setTimeout(r, 300 * (i + 1)))
+    }
+  }
+}
+const reload = (page) => retry(() => page.reload())
 
 const engines = (process.argv[2] || 'chromium,firefox,webkit').split(',')
 const results = []
@@ -75,14 +90,14 @@ async function open(ctx, path = '/') {
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
   page.on('dialog', (d) => { errors.push('dialog: ' + d.message()); d.dismiss() })
-  await page.goto(TOOL + path)
+  await retry(() => page.goto(TOOL + path))
   await page.evaluate((o) => { localStorage.setItem('neo-ws:dev-origin', o) }, FRAME)
   return { page, errors }
 }
 
 async function seedFrame(ctx) {
   const p = await ctx.newPage()
-  await p.goto(FRAME + '/workspace/vault.html')
+  await retry(() => p.goto(FRAME + '/workspace/vault.html'))
   const stamp = W.makeStamp()
   const ws = W.normalizeWorkspace(WS).ws
   await p.evaluate(([rec, cookie]) => { localStorage.setItem('neo-ws:workspace', JSON.stringify(rec)); document.cookie = cookie },
@@ -108,7 +123,7 @@ for (const eng of engines) {
       people: [{ id: X, name: X, color: 'red;x:url(y)' }], weeks: [{ id: X, label: X }],
       meetings: [{ id: X, weekId: X, type: X, durationMin: X, attendees: [X] }], settings: { thresholdHours: X },
     })), XSS)
-    await page.reload()
+    await reload(page)
     await page.waitForSelector('.chip')
     check(eng, 'hostile saved state renders as text', (await page.locator('img[src=x]').count()) === 0 && (await page.locator('.block').count()) === 1 && !errors.length, errors.join('; '))
     await page.evaluate(() => localStorage.removeItem('loadout-v1'))
@@ -119,7 +134,7 @@ for (const eng of engines) {
   await seedFrame(ctx)
   {
     const { page, errors } = await open(ctx)
-    await page.reload()
+    await reload(page)
     // Both servers are localhost, one site, so every engine shares here; WebKit partitions
     // only across sites. The Load path is checked when a frame does not share.
     const banner = page.locator('#wsBanner button.neo-ws-primary')
@@ -143,6 +158,10 @@ for (const eng of engines) {
       await page.waitForTimeout(400)
       const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('loadout-v1')).people.map((p) => p.ws))
       check(eng, 'chips keep their workspace ids across a reload', stored.join() === MEMBERS.join(), stored.join())
+      // Everyone the banner would bring is on the board: after a reload it offers nothing.
+      await reload(page)
+      await page.waitForTimeout(600)
+      check(eng, 'the banner is gone once the team is on the board', !(await page.locator('#wsBanner').isVisible()))
     } else {
       // No shared team: the sheet offers the round trip.
       await page.keyboard.press(',')
@@ -157,7 +176,7 @@ for (const eng of engines) {
   {
     const { page } = await open(ctx)
     await page.evaluate((c) => { document.cookie = c }, W.meCookie({ h: [540, 780], d: '135' }, LOCAL))
-    await page.reload()
+    await reload(page)
     await page.waitForSelector('.neo-ws-gear')
     await page.locator('#main').click({ position: { x: 600, y: 5 } }).catch(() => {})
     await page.keyboard.press(',')
@@ -180,7 +199,7 @@ for (const eng of engines) {
   // 4. Keyboard: a duration chip keeps focus after it changes; the drawer is out of the tab order when closed.
   {
     const { page } = await open(ctx)
-    await page.reload()
+    await reload(page)
     await page.evaluate(() => document.getElementById('sampleBtn').click())
     const dur = page.locator('[data-cycle-dur]').first()
     const id = await dur.getAttribute('data-cycle-dur')
@@ -202,7 +221,7 @@ for (const eng of engines) {
   // 5. Save: the sheet sends the board's people to the Workspace page's review.
   {
     const { page } = await open(ctx)
-    await page.reload()
+    await reload(page)
     await page.evaluate(() => document.getElementById('sampleBtn').click())
     await page.keyboard.press(',')
     await page.locator('dialog[open] button', { hasText: "Save this board's people" }).click()
@@ -211,6 +230,10 @@ for (const eng of engines) {
     const sent = got && W.decodePayload(got.payload)
     const names = sent ? sent.ws.people.map((p) => p.name) : []
     check(eng, 'save opens the review with the board\'s people', !!got && got.tool === 'loadout' && names.join() === 'Maya Chen,Diego Ruiz,Priya Nair,Tom Weber', page.url().slice(0, 120))
+    // The review may merge a chip under another id, or be declined: the chips keep no made-up one.
+    await retry(() => page.goto(TOOL + '/'))
+    const ids = await page.evaluate(() => JSON.parse(localStorage.getItem('loadout-v1') || '{"people":[]}').people.map((p) => p.ws || ''))
+    check(eng, 'saving writes no workspace id onto the chips', ids.length === 4 && ids.every((w) => !w), ids.join())
     await page.close()
   }
 
@@ -226,15 +249,35 @@ for (const eng of engines) {
     await page.close()
   }
 
-  // 7. Phone: remove controls show without hover and are 44px on touch.
+  // 7. Phone: chip removes show without hover at 44px; a face's remove waits for a tap.
   {
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: eng !== 'firefox' })
     const { page } = await open(phone)
-    await page.reload()
+    await reload(page)
     await page.evaluate(() => document.getElementById('sampleBtn').click())
     const box = await page.locator('.chip-remove').first().boundingBox()
     const op = await page.locator('.chip-remove').first().evaluate((e) => getComputedStyle(e).opacity)
     check(eng, 'phone: chip remove visible and 44px', box && box.width >= 44 && box.height >= 44 && op === '1', JSON.stringify(box) + ' ' + op)
+    // A face's remove badge waits for a tap on that face, then removes on a tap.
+    if (await page.evaluate(() => matchMedia('(hover: none)').matches)) {
+      const seat = page.locator('.seat').first()
+      const x = seat.locator('.seat-x')
+      const hiddenFirst = await x.evaluate((e) => getComputedStyle(e).visibility === 'hidden')
+      const before = await page.locator('.seat').count()
+      await seat.tap({ position: { x: 8, y: 22 } })
+      const shown = await x.evaluate((e) => getComputedStyle(e).visibility === 'visible')
+      const others = await page.locator('.seat--armed').count()
+      check(eng, 'phone: a face shows its remove only once tapped', hiddenFirst && shown && others === 1)
+      await x.tap()
+      await page.waitForTimeout(100)
+      check(eng, 'phone: the shown remove takes the face off the meeting', (await page.locator('.seat').count()) === before - 1)
+    }
+    // The roster shows the whole sample team above the add field.
+    const fits = await page.evaluate(() => {
+      const last = [...document.querySelectorAll('.chip')].pop().getBoundingClientRect()
+      return last.bottom <= document.querySelector('.roster-add').getBoundingClientRect().top + 1
+    })
+    check(eng, 'phone: the sample roster is not cut by the add field', fits)
     const tiny = await page.$$eval('body *', (els) => els.filter((e) => e.childElementCount === 0 && e.textContent.trim() && e.offsetParent !== null && parseFloat(getComputedStyle(e).fontSize) < 12).map((e) => e.className + ':' + e.textContent.trim().slice(0, 20)))
     check(eng, 'phone: no visible text under 12px', !tiny.length, tiny.slice(0, 5).join(', '))
     await phone.close()

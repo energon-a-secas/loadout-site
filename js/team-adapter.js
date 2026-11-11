@@ -7,7 +7,7 @@
 // ════════════════════════════════════════════════════════════
 
 import { normalizeWorkspace, colorFor, initials as wsInitials, foldName } from './neorgon-workspace-core.js'
-import { cleanText, cleanColor, LIMITS } from './validate.js'
+import { cleanText, cleanColor, cleanNumber, LIMITS, WORK_HOURS } from './validate.js'
 
 /** How many people "Add my team" brings onto a board when no team says who. */
 export const NO_TEAM_CAP = 40
@@ -34,30 +34,40 @@ export function pickTeam(raw) {
 /**
  * The changes "Add my team" makes to a roster, without making them.
  *   add:  [{ ws, name, color }] new chips, coloured as every tool colours them
- *   link: [{ id, ws }]          a chip already on the board under the same name, now tied to its person
+ *   link: [{ id, ws }]          a chip already on the board, now tied to its person
  *   kept: number                people already on the board
+ *
+ * A chip counts as tied only when its `ws` names a person this workspace holds.
+ * Any other chip is loose and is linked by the id Loadout saves it under, else
+ * by a name exactly one loose chip carries. A save can merge a chip into a
+ * person by name under that person's own id, so the chip's saved id is a hint,
+ * never a fact; trusting it is how "Add my team" used to add a second copy.
  */
 export function planAdd(rawWs, roster, cap = LIMITS.people) {
-  const { people, teams } = pickTeam(rawWs)
+  const { ws } = normalizeWorkspace(rawWs)
+  const { people, teams } = pickTeam(ws)
+  const known = new Set(ws.people.map(p => p.id))
   const add = [], link = []
   let kept = 0
-  const linked = new Set(roster.map(p => p.ws).filter(Boolean))
-  const byName = new Map()
-  const names = new Map()
+  const linked = new Set()
+  const byId = new Map(), byName = new Map(), names = new Map()
   for (const p of roster) {
-    if (p.ws) continue
+    if (p.ws && known.has(p.ws)) { linked.add(p.ws); continue }
+    byId.set(workspaceId(p), p)
     const key = foldName(p.name)
     names.set(key, (names.get(key) || 0) + 1)
     byName.set(key, p)
   }
+  const used = new Set()
   let room = Math.max(0, cap - roster.length)
   for (const person of people) {
     if (linked.has(person.id)) { kept++; continue }
     const key = foldName(person.name)
-    const local = names.get(key) === 1 ? byName.get(key) : null
-    if (local) {
+    let local = byId.get(person.id)
+    if (!local || used.has(local)) local = names.get(key) === 1 ? byName.get(key) : null
+    if (local && !used.has(local)) {
       link.push({ id: local.id, ws: person.id })
-      names.delete(key)
+      used.add(local)
       linked.add(person.id)
       kept++
       continue
@@ -97,14 +107,18 @@ export function toWorkspace(people) {
   return { v: 1, people: out }
 }
 
-/** Weekly working hours from the visitor's settings: the day's span times the work days. */
+/**
+ * Weekly working hours from the visitor's settings: the day's span times the
+ * work days, inside the range the stored state accepts (so a reload never
+ * reads back a different number than the one in use).
+ */
 export function weeklyHours(prefs, fallback = 40) {
   const h = prefs && Array.isArray(prefs.h) ? prefs.h : null
   const d = prefs && typeof prefs.d === 'string' ? prefs.d : ''
   if (!h || h.length !== 2 || !Number.isFinite(h[0]) || !Number.isFinite(h[1]) || h[1] <= h[0]) return fallback
   const days = new Set(d.split('').filter(c => c >= '1' && c <= '7')).size
   if (!days) return fallback
-  return Math.round(((h[1] - h[0]) / 60) * days * 4) / 4
+  return cleanNumber(((h[1] - h[0]) / 60) * days, WORK_HOURS.min, WORK_HOURS.max, fallback, 0.25)
 }
 
 /** The colour and initials a chip shows: the kit's for a workspace person, so every tool agrees. */

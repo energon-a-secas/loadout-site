@@ -45,7 +45,7 @@ export function renderWeekTabs() {
           <span class="week-tab-label" data-rename-week="${esc(w.id)}">${escHtml(w.label)}</span>
           ${count ? `<span class="week-tab-count" aria-hidden="true">${count}</span>` : ''}
         </button>
-        ${active && multi ? `<button type="button" class="week-tab-x" data-remove-week="${esc(w.id)}" aria-label="Delete ${escHtml(w.label)}" title="Delete this week">×</button>` : ''}
+        ${active && multi ? `<button type="button" class="week-tab-x" data-remove-week="${esc(w.id)}" aria-label="Delete ${escHtml(w.label)}" title="Delete ${escHtml(w.label)}">×</button>` : ''}
       </span>`
   }).join('') + `
     <button type="button" class="week-add" id="dupWeekBtn" title="Copy this week's meetings into a new week">Duplicate week</button>
@@ -84,19 +84,20 @@ export function renderRoster() {
     const ringColor = band === 'green' ? 'var(--load-green)' : band === 'amber' ? 'var(--load-amber)' : 'var(--load-red)'
     const avgLabel = multi ? `avg ${fmtHours(avg)}` : fmtHours(avg)
     return `
-      <div class="chip ${picked ? 'chip--picked' : ''}" data-person="${esc(p.id)}"
-           draggable="false" tabindex="0" role="button"
-           aria-label="${escHtml(p.name)}, ${multi ? `averaging ${avg.toFixed(1)} hours a week` : `${avg.toFixed(1)} hours`}, ${wkHours.toFixed(1)} this week in ${wkCount} meetings. ${picked ? 'Picked up. Press Enter on a meeting to seat.' : 'Press Enter to pick up.'}"
+      <div class="chip ${picked ? 'chip--picked' : ''}" data-person="${esc(p.id)}" draggable="false"
            title="${escHtml(p.name)}: ${avgLabel}/wk${multi ? ` · this week ${fmtHours(wkHours)}` : ''} across ${wkCount} meeting${wkCount === 1 ? '' : 's'}">
-        <span class="chip-ring" style="--ring-deg:${deg}deg; --ring-color:${ringColor}; --class-color:${colorOf(p)}">
-          <span class="chip-avatar" style="--class-color:${colorOf(p)}">${escHtml(face(p).initials)}</span>
-        </span>
-        <span class="chip-meta">
-          <span class="chip-name">${escHtml(p.name)}</span>
-          <span class="chip-load chip-load--${band}">${avgLabel} · ${wkCount} mtg${wkCount === 1 ? '' : 's'}</span>
-        </span>
-        ${band === 'red' ? '<span class="chip-pip" aria-hidden="true">!</span>' : ''}
-        <button class="chip-remove" data-remove-person="${esc(p.id)}" aria-label="Remove ${escHtml(p.name)}" title="Remove">×</button>
+        <button type="button" class="chip-main" data-person="${esc(p.id)}" aria-pressed="${picked}"
+                aria-label="${escHtml(p.name)}, ${multi ? `averaging ${avg.toFixed(1)} hours a week` : `${avg.toFixed(1)} hours`}, ${wkHours.toFixed(1)} this week in ${wkCount} meetings. ${picked ? 'Picked up. Press Enter on a meeting to seat.' : 'Press Enter to pick up.'}">
+          <span class="chip-ring" style="--ring-deg:${deg}deg; --ring-color:${ringColor}; --class-color:${colorOf(p)}">
+            <span class="chip-avatar" style="--class-color:${colorOf(p)}">${escHtml(face(p).initials)}</span>
+          </span>
+          <span class="chip-meta">
+            <span class="chip-name">${escHtml(p.name)}</span>
+            <span class="chip-load chip-load--${band}">${avgLabel} · ${wkCount} mtg${wkCount === 1 ? '' : 's'}</span>
+          </span>
+          ${band === 'red' ? '<span class="chip-pip" aria-hidden="true">!</span>' : ''}
+        </button>
+        <button type="button" class="chip-remove" data-remove-person="${esc(p.id)}" aria-label="Remove ${escHtml(p.name)}" title="Remove">×</button>
       </div>`
   }).join('')
 }

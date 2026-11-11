@@ -10,9 +10,9 @@
 // ════════════════════════════════════════════════════════════
 
 import { NeoWorkspace } from './neorgon-workspace.js'
-import { state, addPerson, getPerson, snapshot, saveState, debouncedSave } from './state.js'
+import { state, addPerson, getPerson, snapshot, debouncedSave } from './state.js'
 import { render, renderInsights } from './render.js'
-import { planAdd, toWorkspace, workspaceId, weeklyHours } from './team-adapter.js'
+import { planAdd, toWorkspace, weeklyHours } from './team-adapter.js'
 import { showToast } from './utils.js'
 
 let ws = null
@@ -45,15 +45,28 @@ export function addTeam(workspace) {
   render()
   debouncedSave()
   const from = plan.teams.length ? ` from ${plan.teams.join(', ')}` : ''
-  showToast(`Added ${plural(plan.add.length, 'person', 'people')}${from}`, 'info')
+  showToast(plan.add.length
+    ? `Added ${plural(plan.add.length, 'person', 'people')}${from}`
+    : `Your team is already on the board. ${plural(plan.link.length, 'person', 'people')} now linked to your workspace`, 'info')
   return plan
 }
 
 function payload() {
-  // Tie each chip to the id it is saved under, so "Add my team" later finds it.
-  for (const p of state.people) if (!p.ws) p.ws = workspaceId(p)
-  saveState()
+  // Nothing is written to the chips here. The review may merge a chip into a
+  // person under another id, or the visitor may press "Not now"; planAdd finds
+  // the chip again by the id it was saved under, or by its name.
   return toWorkspace(state.people)
+}
+
+/**
+ * The banner offers the team only while "Add my team" would add someone.
+ * The kit draws and hides it on its own terms; this hides it too once
+ * everybody it would bring is already on the board.
+ */
+function syncBanner(el) {
+  const t = ws.team()
+  const done = t.status !== 'stale' && !!t.ws && planAdd(t.ws, state.people).add.length === 0
+  el.classList.toggle('ws-banner--done', done)
 }
 
 export function initWorkspace() {
@@ -83,7 +96,14 @@ export function initWorkspace() {
   })
   ws.mountGear({ keepMobile: true })
   const banner = document.getElementById('wsBanner')
-  if (banner) ws.banner(banner)
+  if (banner) {
+    ws.banner(banner)
+    const sync = () => syncBanner(banner)
+    ws.on('team', sync)
+    const list = document.getElementById('rosterList')
+    if (list) new MutationObserver(sync).observe(list, { childList: true })
+    sync()
+  }
   return ws
 }
 

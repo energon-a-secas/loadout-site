@@ -37,7 +37,16 @@ function commit() {
   const key = focusKey()
   render()
   debouncedSave()
-  if (key && !document.activeElement?.matches?.(key)) document.querySelector(key)?.focus()
+  // A chip's wrapper carries its person too; only the focusable match is refocused.
+  if (key && !document.activeElement?.matches?.(key)) document.querySelector(`${key}:is(button, a[href], input, select, textarea, [tabindex])`)?.focus()
+}
+
+// Touch: a face's remove badge would cover its initials, so a tap on the face
+// arms it (the CSS shows the badge only then) and a tap anywhere else disarms.
+function armSeat(seat) {
+  const on = !!seat && !seat.classList.contains('seat--armed')
+  document.querySelectorAll('.seat--armed').forEach(s => s.classList.remove('seat--armed'))
+  if (on && matchMedia('(hover: none)').matches) seat.classList.add('seat--armed')
 }
 
 const DURATIONS = [15, 30, 45, 60, 90, 120]
@@ -152,6 +161,7 @@ function pulseSeat(meetingId, personId) {
 // ── Click delegation ─────────────────────────────────────────
 function onClick(e) {
   const t = e.target
+  if (!t.closest('.seat--armed')) armSeat(null)
 
   // ── Week tabs ──
   // Delete current week (the × on the active tab): checked before switch/rename.
@@ -208,6 +218,10 @@ function onClick(e) {
     setPicked(null)
     return
   }
+
+  // A tap on a face (no one picked up): arm its remove badge.
+  const seatFace = t.closest('.seat')
+  if (seatFace && !t.closest('.seat-x')) { armSeat(seatFace); return }
 
   // Unseat
   const unseat = t.closest('[data-unseat]')
@@ -353,7 +367,7 @@ function closeTypePicker() {
 function onKeydown(e) {
   // Enter/Space on a focused chip picks it up; on a block seats the picked person.
   const active = document.activeElement
-  if ((e.key === 'Enter' || e.key === ' ') && active?.classList.contains('chip')) {
+  if ((e.key === 'Enter' || e.key === ' ') && active?.classList.contains('chip-main')) {
     e.preventDefault(); togglePick(active.dataset.person); return
   }
   if (e.key === 'Enter' && active?.classList.contains('block') && ui.pickedPersonId) {
