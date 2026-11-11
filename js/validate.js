@@ -11,7 +11,9 @@
 
 import { DAYS, RECURRENCE, MEETING_TYPES, PRESETS } from './data.js'
 
-export const LIMITS = { people: 500, weeks: 52, meetings: 2000, name: 40, week: 24, title: 40 }
+// A name holds as much as the Workspace keeps (120), so a person brought in and
+// saved straight back reads the same and the save changes nothing.
+export const LIMITS = { people: 500, weeks: 52, meetings: 2000, name: 120, week: 24, title: 40 }
 export const DURATION = { min: 5, max: 480 }
 export const THRESHOLD = { min: 2, max: 20 }
 export const WORK_HOURS = { min: 1, max: 168 }

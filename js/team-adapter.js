@@ -34,7 +34,8 @@ export function pickTeam(raw) {
 /**
  * The changes "Add my team" makes to a roster, without making them.
  *   add:  [{ ws, name, color }] new chips, coloured as every tool colours them
- *   link: [{ id, ws }]          a chip already on the board, now tied to its person
+ *   link: [{ id, ws, color }]   a chip already on the board, now tied to its person
+ *                               and wearing the colour every tool gives them
  *   kept: number                people already on the board
  *
  * A chip counts as tied only when its `ws` names a person this workspace holds.
@@ -66,7 +67,7 @@ export function planAdd(rawWs, roster, cap = LIMITS.people) {
     let local = byId.get(person.id)
     if (!local || used.has(local)) local = names.get(key) === 1 ? byName.get(key) : null
     if (local && !used.has(local)) {
-      link.push({ id: local.id, ws: person.id })
+      link.push({ id: local.id, ws: person.id, color: colorFor(person) })
       used.add(local)
       linked.add(person.id)
       kept++
@@ -90,19 +91,18 @@ export function workspaceId(p) {
 }
 
 /**
- * The save payload: the board's people. A person who came from the workspace
- * goes back by their id and name only, so Loadout never overwrites the colour
- * the workspace keeps; a person made here carries the colour Loadout gave them.
+ * The save payload: the board's people, by id and name only. Loadout never
+ * sends a colour: its chips are coloured from a palette as they are added, not
+ * by the visitor, and a chip made here can be merged by name into a workspace
+ * person, whose own colour must survive the save. A person new to the
+ * workspace takes the colour every tool derives from their id.
  */
 export function toWorkspace(people) {
   const out = []
   for (const p of people) {
     const name = cleanText(p.name, LIMITS.name)
     if (!name) continue
-    const person = { id: workspaceId(p), name }
-    const color = cleanColor(p.color)
-    if (!p.ws && color) person.color = color
-    out.push(person)
+    out.push({ id: workspaceId(p), name })
   }
   return { v: 1, people: out }
 }

@@ -58,9 +58,11 @@ const WS = {
   people: [
     { id: 'ana-rojas', name: 'Ana Rojas' },
     { id: 'kenji-sato', name: 'Kenji Sato', color: '#0f766e' },
-    { id: 'lea-muller', name: 'Léa Müller' },
+    // Longer than the 40 characters Loadout once kept: a save straight back must not shorten it.
+    { id: 'lea-muller', name: 'Léa Müller de los Angeles Fernandez-Gutierrez Castillo' },
     { id: 'evil', name: XSS, color: 'red;background:url(//x)' },
-    { id: 'priya-nair', name: 'Priya Nair' },
+    // The sample team has a Priya Nair of its own: saving it must not repaint her.
+    { id: 'priya-nair', name: 'Priya Nair', color: '#123456' },
   ],
   teams: [
     { id: 'payments', name: 'Payments', lead: 'ana-rojas', members: [{ person: 'kenji-sato' }, { person: 'lea-muller' }, { person: 'evil' }] },
@@ -162,6 +164,15 @@ for (const eng of engines) {
       await reload(page)
       await page.waitForTimeout(600)
       check(eng, 'the banner is gone once the team is on the board', !(await page.locator('#wsBanner').isVisible()))
+      // Saved straight back, the team changes nothing: every name whole, no colour sent.
+      await page.keyboard.press(',')
+      await page.locator('dialog[open] button', { hasText: "Save this board's people" }).click()
+      await page.waitForURL(/\/workspace\/#save=/, { timeout: 5000 }).catch(() => {})
+      const back = W.parseFragment(new URL(page.url()).hash, { selfHostname: 'localhost' })
+      const sentBack = back && W.decodePayload(back.payload)
+      const merged = sentBack && W.previewMerge(W.normalizeWorkspace(WS).ws, sentBack.ws)
+      check(eng, 'the team saved straight back changes nothing', !!merged && !merged.added.length && !merged.updated.length && sentBack.ws.people.every((p) => !('color' in p)),
+        JSON.stringify(merged && { added: merged.added, updated: merged.updated }))
     } else {
       // No shared team: the sheet offers the round trip.
       await page.keyboard.press(',')
@@ -230,6 +241,8 @@ for (const eng of engines) {
     const sent = got && W.decodePayload(got.payload)
     const names = sent ? sent.ws.people.map((p) => p.name) : []
     check(eng, 'save opens the review with the board\'s people', !!got && got.tool === 'loadout' && names.join() === 'Maya Chen,Diego Ruiz,Priya Nair,Tom Weber', page.url().slice(0, 120))
+    const priya = sent && W.previewMerge(W.normalizeWorkspace(WS).ws, sent.ws).next.people.find((p) => p.id === 'priya-nair')
+    check(eng, 'a sample chip merged by name keeps the workspace colour', !!priya && priya.color === '#123456', JSON.stringify(priya))
     // The review may merge a chip under another id, or be declined: the chips keep no made-up one.
     await retry(() => page.goto(TOOL + '/'))
     const ids = await page.evaluate(() => JSON.parse(localStorage.getItem('loadout-v1') || '{"people":[]}').people.map((p) => p.ws || ''))

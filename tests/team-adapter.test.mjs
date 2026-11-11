@@ -30,7 +30,7 @@ test('pickTeam: my teams, else the first team, else everyone up to the cap', () 
 test('planAdd: new chips get the kit colour, a same-named chip is linked, nothing twice', () => {
   const roster = [{ id: 'l1', name: 'ana rojas', color: '#f87171' }, { id: 'l2', name: 'Tom' }]
   const plan = planAdd(WS, roster)
-  assert.deepEqual(plan.link, [{ id: 'l1', ws: 'ana-rojas' }])
+  assert.deepEqual(plan.link, [{ id: 'l1', ws: 'ana-rojas', color: colorFor({ id: 'ana-rojas', name: 'Ana Rojas' }) }])
   assert.deepEqual(plan.add.map(a => a.ws), ['kenji-sato', 'lea-muller', 'evil'])
   assert.equal(plan.add[0].color, '#0f766e')
   assert.equal(plan.add[1].color, colorFor({ id: 'lea-muller', name: 'Léa Müller' }))
@@ -57,7 +57,7 @@ test('planAdd respects the roster cap', () => {
   assert.equal(plan.skipped, 3)
 })
 
-test('toWorkspace: ids round-trip, workspace colours are not overwritten', () => {
+test('toWorkspace: ids round-trip, no colour is ever sent', () => {
   const people = [
     { id: 'mg2x1', name: 'Maya Chen', color: '#f87171' },
     { id: 'n0', name: 'Kenji Sato', color: '#0f766e', ws: 'kenji-sato' },
@@ -65,7 +65,7 @@ test('toWorkspace: ids round-trip, workspace colours are not overwritten', () =>
   ]
   const payload = toWorkspace(people)
   assert.deepEqual(payload, { v: 1, people: [
-    { id: 'loadout-mg2x1', name: 'Maya Chen', color: '#f87171' },
+    { id: 'loadout-mg2x1', name: 'Maya Chen' },
     { id: 'kenji-sato', name: 'Kenji Sato' },
   ] })
   const { ws, issues } = normalizeWorkspace(payload)
@@ -110,11 +110,11 @@ test('planAdd after a save: a chip merged by name under another id is linked, no
   const saved = previewMerge(ws0, toWorkspace(roster))
   assert.deepEqual(saved.added, [], 'the review matched her by name')
   const plan = planAdd(saved.next, roster)
-  assert.deepEqual(plan.link, [{ id: 'abc1', ws: 'maya-chen' }])
+  assert.deepEqual(plan.link, [{ id: 'abc1', ws: 'maya-chen', color: colorFor({ id: 'maya-chen', name: 'Maya Chen' }) }])
   assert.deepEqual(plan.add.map(a => a.ws), ['kenji'])
   // A chip an older build tied to its made-up id (or "Not now") is loose, and links the same way.
   const stale = planAdd(saved.next, [{ ...roster[0], ws: 'loadout-abc1' }])
-  assert.deepEqual(stale.link, [{ id: 'abc1', ws: 'maya-chen' }])
+  assert.deepEqual(stale.link.map(l => l.ws), ['maya-chen'])
   assert.equal(stale.add.length, 1)
 })
 
@@ -125,10 +125,30 @@ test('planAdd after a save that added the chip: linked by the id it was saved un
   next.teams[0].members.push({ person: 'loadout-abc1' }, { person: 'loadout-abc2' })
   const plan = planAdd(next, roster)
   assert.deepEqual(plan.add.map(a => a.ws), ['kenji'], 'two homonyms are told apart by their saved ids')
-  assert.deepEqual(plan.link, [{ id: 'abc1', ws: 'loadout-abc1' }, { id: 'abc2', ws: 'loadout-abc2' }])
+  assert.deepEqual(plan.link.map(l => [l.id, l.ws]), [['abc1', 'loadout-abc1'], ['abc2', 'loadout-abc2']])
 })
 
 test('weeklyHours stays inside the range a reload accepts', () => {
   assert.equal(weeklyHours({ h: [540, 555], d: '1' }), 1)
   assert.equal(weeklyHours({ h: [0, 1439], d: '1234567' }), 168)
+})
+
+test('a long name brought in and saved straight back changes nothing', () => {
+  const long = 'Maria de los Angeles Fernandez-Gutierrez Castillo'
+  const huge = 'N'.repeat(60) + ' ' + 'M'.repeat(59)
+  const ws0 = normalizeWorkspace({ v: 1, me: { person: 'long' }, people: [{ id: 'long', name: long }, { id: 'huge', name: huge }],
+    teams: [{ id: 't', name: 'T', lead: 'long', members: [{ person: 'huge' }] }] }).ws
+  assert.equal(ws0.people[1].name.length, 120)
+  const plan = planAdd(ws0, [])
+  assert.deepEqual(plan.add.map(a => a.name), [long, huge], 'names keep every character the workspace keeps')
+  const roster = plan.add.map((a, i) => ({ id: 'r' + i, ...a }))
+  const merged = previewMerge(ws0, toWorkspace(roster))
+  assert.deepEqual([merged.added, merged.updated], [[], []])
+})
+
+test('a Loadout chip merged by name never repaints the workspace person', () => {
+  const ws0 = normalizeWorkspace({ v: 1, people: [{ id: 'maya-chen', name: 'Maya Chen', color: '#123456' }] }).ws
+  const merged = previewMerge(ws0, toWorkspace([{ id: 's1', name: 'Maya Chen', color: '#f87171' }]))
+  assert.deepEqual([merged.added, merged.updated], [[], []])
+  assert.equal(merged.next.people[0].color, '#123456')
 })

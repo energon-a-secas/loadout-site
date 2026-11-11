@@ -14,6 +14,7 @@ import { state, addPerson, getPerson, snapshot, debouncedSave } from './state.js
 import { render, renderInsights } from './render.js'
 import { planAdd, toWorkspace, weeklyHours } from './team-adapter.js'
 import { showToast } from './utils.js'
+import { cleanColor } from './validate.js'
 
 let ws = null
 let weekNote = null
@@ -40,7 +41,7 @@ export function addTeam(workspace) {
     return plan
   }
   snapshot()
-  for (const l of plan.link) { const p = getPerson(l.id); if (p) p.ws = l.ws }
+  for (const l of plan.link) { const p = getPerson(l.id); if (p) { p.ws = l.ws; p.color = cleanColor(l.color) || p.color } }
   for (const a of plan.add) addPerson(a.name, { color: a.color, ws: a.ws })
   render()
   debouncedSave()
