@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════
-//  state.js — Shared mutable state, persistence, undo history.
+//  state.js: Shared mutable state, persistence, undo history.
 //  Multi-week: the roster and settings are global; meetings belong
 //  to a week (weekId). You view/edit one week at a time.
 // ════════════════════════════════════════════════════════════
@@ -26,7 +26,7 @@ export const state = {
 }
 state.currentWeekId = state.weeks[0].id
 
-// Transient UI state — never persisted.
+// Transient UI state: never persisted.
 export const ui = {
   drawerOpen: false,
   pickedPersonId: null, // keyboard "carry" selection
@@ -138,7 +138,7 @@ export function applyPreset(presetKey) {
   if (!p) return
   state.settings.preset = presetKey
   state.settings.thresholdHours = p.thresholdHours
-  state.settings.workHours = p.workHours
+  // workHours is not the preset's: it comes from the visitor's working hours (js/settings.js).
 }
 
 export function setThreshold(hours) {

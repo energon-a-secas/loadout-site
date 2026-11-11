@@ -8,7 +8,7 @@ import { escHtml, debounce } from './neorgon-dom.js';
 export { escHtml, debounce };
 
 // ════════════════════════════════════════════════════════════
-//  utils.js — Small shared helpers (adapted from pathfinder-site)
+//  utils.js: Small shared helpers (adapted from pathfinder-site)
 // ════════════════════════════════════════════════════════════
 
 // ── ID generator ─────────────────────────────────────────────
@@ -20,14 +20,6 @@ export function genId() { return (Date.now().toString(36) + (++_sid).toString(36
 export function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 
 
-
-// Two-letter initials from a name for the character chip.
-export function initials(name) {
-  const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return '?'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-}
 
 // Render a decimal hour count as a compact human string: 2.75 → "2h 45m".
 export function fmtHours(h) {

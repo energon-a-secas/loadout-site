@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════
-//  events.js — All user interaction: drag-and-drop, keyboard,
+//  events.js: All user interaction: drag-and-drop, keyboard,
 //  meeting CRUD, preset/slider, drawer. Delegated where sensible.
 // ════════════════════════════════════════════════════════════
 
@@ -11,14 +11,33 @@ import {
 } from './state.js'
 import { TYPE_ORDER, MEETING_TYPES, RECURRENCE } from './data.js'
 import { render, renderRoster, renderInsights, renderSettings } from './render.js'
-import { $, showToast, initials, escHtml } from './utils.js'
+import { $, showToast, escHtml } from './utils.js'
 import { personHoursInWeek, fillFor } from './load.js'
-import { cleanColor, cleanText, LIMITS } from './validate.js'
+import { cleanText, LIMITS } from './validate.js'
+import { face } from './team-adapter.js'
+import { workspace, addTeam } from './settings.js'
 
-// Common re-render + persist after a mutation.
+// Common re-render + persist after a mutation. The board is redrawn from
+// strings, so the focused control is found again by its data attributes and
+// refocused: a keyboard user pressing a duration chip stays on it.
+const FOCUS_KEYS = ['cycleDur', 'cycleRec', 'editTitle', 'removeMeeting', 'addMeeting', 'week', 'removeWeek', 'person', 'meeting']
+function focusKey() {
+  const el = document.activeElement
+  if (!el || el === document.body) return null
+  if (el.id) return `#${CSS.escape(el.id)}`
+  for (const k of FOCUS_KEYS) {
+    if (el.dataset && el.dataset[k] !== undefined) {
+      const attr = 'data-' + k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())
+      return `[${attr}="${CSS.escape(el.dataset[k])}"]`
+    }
+  }
+  return null
+}
 function commit() {
+  const key = focusKey()
   render()
   debouncedSave()
+  if (key && !document.activeElement?.matches?.(key)) document.querySelector(key)?.focus()
 }
 
 const DURATIONS = [15, 30, 45, 60, 90, 120]
@@ -54,8 +73,8 @@ function onPointerMove(e) {
     const p = getPerson(drag.personId)
     const ghost = document.createElement('div')
     ghost.className = 'drag-ghost'
-    ghost.style.setProperty('--class-color', cleanColor(p?.color) || '#94a3b8')
-    ghost.textContent = initials(p?.name)
+    ghost.style.setProperty('--class-color', p ? face(p).color : '#94a3b8')
+    ghost.textContent = p ? face(p).initials : '?'
     document.body.appendChild(ghost)
     drag.ghost = ghost
   }
@@ -135,7 +154,7 @@ function onClick(e) {
   const t = e.target
 
   // ── Week tabs ──
-  // Delete current week (the × on the active tab) — checked before switch/rename.
+  // Delete current week (the × on the active tab): checked before switch/rename.
   const rmWeek = t.closest('[data-remove-week]')
   if (rmWeek) {
     e.stopPropagation()
@@ -151,9 +170,24 @@ function onClick(e) {
   if (renameTarget && renameTarget.dataset.renameWeek === state.currentWeekId) {
     editWeekName(renameTarget.dataset.renameWeek, renameTarget); return
   }
-  // Switch weeks
+  // Switch weeks; pressing the week already shown renames it (keyboard and touch).
   const weekTab = t.closest('[data-week]')
-  if (weekTab) { snapshot(); setCurrentWeek(weekTab.dataset.week); commit(); return }
+  if (weekTab) {
+    if (weekTab.dataset.week === state.currentWeekId) {
+      const label = weekTab.querySelector('[data-rename-week]')
+      if (label) editWeekName(weekTab.dataset.week, label)
+      return
+    }
+    snapshot(); setCurrentWeek(weekTab.dataset.week); commit(); return
+  }
+
+  // Empty roster: the sample, or the team from the workspace
+  const empty = t.closest('[data-empty]')
+  if (empty) {
+    if (empty.dataset.empty === 'sample') loadSample()
+    else offerTeam(empty)
+    return
+  }
 
   // Remove person
   const rmPerson = t.closest('[data-remove-person]')
@@ -219,7 +253,10 @@ function editWeekName(weekId, el) {
   input.maxLength = 24
   el.replaceWith(input)
   input.focus(); input.select()
-  const done = () => { snapshot(); renameWeek(weekId, input.value); commit() }
+  const done = () => {
+    snapshot(); renameWeek(weekId, input.value); commit()
+    document.querySelector(`[data-week="${CSS.escape(weekId)}"]`)?.focus()
+  }
   input.addEventListener('blur', done, { once: true })
   input.addEventListener('keydown', ev => {
     if (ev.key === 'Enter') { ev.preventDefault(); input.blur() }
@@ -264,7 +301,10 @@ function editTitle(meetingId, el) {
   input.maxLength = 40
   el.replaceWith(input)
   input.focus(); input.select()
-  const done = () => { m.title = cleanText(input.value, LIMITS.title); commit() }
+  const done = () => {
+    m.title = cleanText(input.value, LIMITS.title); commit()
+    document.querySelector(`[data-edit-title="${CSS.escape(meetingId)}"]`)?.focus()
+  }
   input.addEventListener('blur', done, { once: true })
   input.addEventListener('keydown', ev => {
     if (ev.key === 'Enter') { ev.preventDefault(); input.blur() }
@@ -321,6 +361,7 @@ function onKeydown(e) {
   }
   if (e.key === 'Escape') {
     if (picker) { closeTypePicker(); return }
+    if (ui.drawerOpen) { setDrawer(false); return }
     if (ui.pickedPersonId) { setPicked(null); return }
   }
   // Undo
@@ -333,14 +374,12 @@ function onKeydown(e) {
 // ── Toolbar / roster form / settings ─────────────────────────
 function bindToolbar() {
   const nameInput = $.personName()
-  const addPersonBtn = document.getElementById('addPersonBtn')
   const submitPerson = () => {
     const name = nameInput.value.trim()
     if (!name) { nameInput.focus(); return }
     snapshot(); addPerson(name); nameInput.value = ''; commit(); nameInput.focus()
   }
-  addPersonBtn?.addEventListener('click', submitPerson)
-  nameInput?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitPerson() } })
+  document.getElementById('addPersonForm')?.addEventListener('submit', e => { e.preventDefault(); submitPerson() })
 
   $.presetSelect()?.addEventListener('change', e => {
     snapshot(); applyPreset(e.target.value); commit()
@@ -350,13 +389,9 @@ function bindToolbar() {
     renderSettings(); renderRoster(); renderInsights(); debouncedSave()
   })
 
-  document.getElementById('insightToggle')?.addEventListener('click', () => {
-    ui.drawerOpen = !ui.drawerOpen
-    document.body.classList.toggle('drawer-open', ui.drawerOpen)
-  })
-  const closeDrawer = () => { ui.drawerOpen = false; document.body.classList.remove('drawer-open') }
-  document.getElementById('drawerClose')?.addEventListener('click', closeDrawer)
-  document.getElementById('drawerScrim')?.addEventListener('click', closeDrawer)
+  document.getElementById('insightToggle')?.addEventListener('click', () => setDrawer(!ui.drawerOpen))
+  document.getElementById('drawerClose')?.addEventListener('click', () => setDrawer(false))
+  document.getElementById('drawerScrim')?.addEventListener('click', () => setDrawer(false))
 
   document.getElementById('resetBtn')?.addEventListener('click', () => {
     if (!state.people.length && !state.meetings.length) return
@@ -368,6 +403,26 @@ function bindToolbar() {
   document.getElementById('sampleBtn')?.addEventListener('click', loadSample)
 }
 
+// The Signals drawer: focus goes in on open and back to its toggle on close.
+function setDrawer(open) {
+  ui.drawerOpen = open
+  document.body.classList.toggle('drawer-open', open)
+  const toggle = document.getElementById('insightToggle')
+  toggle?.setAttribute('aria-expanded', String(open))
+  if (open) setTimeout(() => document.getElementById('drawerClose')?.focus(), 0)
+  else if (document.getElementById('insightDrawer')?.contains(document.activeElement)) toggle?.focus()
+}
+
+// "Add my team" on the empty roster: the workspace team when this tool has
+// one, else the Settings sheet, which explains how to get it.
+function offerTeam(invoker) {
+  const ws = workspace()
+  if (!ws) { showToast('Settings are not available here', 'info'); return }
+  const t = ws.team()
+  if (t.ws && t.ws.people.length) addTeam(t.ws)
+  else ws.open({ invoker })
+}
+
 // A one-click demo team across three distinct weeks so the multi-week
 // planner (and how load averages vs. spikes) is obvious at a glance.
 function loadSample() {
@@ -377,20 +432,20 @@ function loadSample() {
   const people = names.map(n => addPerson(n))
   const ids = people.map(p => p.id)
 
-  // Week 1 — a steady baseline cadence.
+  // Week 1: a steady baseline cadence.
   renameWeek(state.currentWeekId, 'Steady week')
   const daily = addMeeting('mon', 'daily'); daily.attendees = ids
   const wed = addMeeting('wed', 'weekly'); wed.attendees = ids.slice(0, 3)
   const oneone = addMeeting('fri', 'oneonone'); oneone.attendees = [ids[0]]
 
-  // Week 2 — clone the baseline, then pile on a customer push (spike).
+  // Week 2: clone the baseline, then pile on a customer push (spike).
   const heavy = addWeek(state.currentWeekId)
   renameWeek(heavy.id, 'Launch week')
   const c1 = addMeeting('tue', 'customer'); c1.attendees = [ids[0], ids[1]]
   const c2 = addMeeting('thu', 'customer'); c2.attendees = [ids[0], ids[1]]
   const push = addMeeting('wed', 'daily'); push.attendees = [ids[0], ids[1]]
 
-  // Week 3 — a lighter recovery week.
+  // Week 3: a lighter recovery week.
   const light = addWeek()
   renameWeek(light.id, 'Recovery week')
   const standup = addMeeting('mon', 'daily'); standup.attendees = ids

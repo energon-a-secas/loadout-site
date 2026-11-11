@@ -48,6 +48,8 @@ Load is real weighted meeting-hours, not a raw meeting count. Five 15-minute sta
 - **Team profiles** -- New, Experienced, and Support presets set a starting overload threshold you can then tune with a slider
 - **Signals drawer** -- flags overloaded and under-loaded people, oversized meetings, likely duplicates, and syncs that happen too often
 - **Puzzle-piece week** -- Monday to Friday columns of interlocking meeting blocks, no hours to fuss over
+- **Your team, from your workspace** -- the gear (or the `,` key) opens the Neorgon Settings sheet: "Add my team to Loadout" puts your Neorgon Workspace team on the board with the same colours and initials every Neorgon tool uses, and the board's people can be saved back through the Workspace page's review
+- **Your work week** -- overload percentages use your own working hours times your work days, set once for every Neorgon planning tool
 - **Fully local** -- everything saves to your browser, no accounts, no backend, keyboard and drag both supported
 
 ---
@@ -80,14 +82,19 @@ loadout-site/
 ├── css/
 │   └── style.css       # Neorgon tokens + puzzle blocks, bottle meters, chips, drag FX
 ├── js/
-│   ├── app.js          # Entry point — loadState, render, bindEvents
+│   ├── app.js          # Entry point: loadState, initWorkspace, render, bindEvents
 │   ├── state.js        # Roster + weeks + meetings, localStorage (loadout-v1), snapshot/undo
+│   ├── validate.js     # The one gate for stored state: ids, colours, types, days, numbers
+│   ├── settings.js     # Neorgon Workspace: Settings sheet, Add my team, save, work week
+│   ├── team-adapter.js # Loadout people to workspace people and back (pure, tested)
 │   ├── data.js         # Meeting types, presets, recurrence weighting, class colors
-│   ├── load.js         # Weighted meeting-hours model — per-week + multi-week average
+│   ├── load.js         # Weighted meeting-hours model: per-week + multi-week average
 │   ├── insights.js     # Per-week overload / duplicate / oversized / frequency flags
 │   ├── render.js       # Week tabs, roster chips, week board, puzzle blocks, bottle wall
 │   ├── events.js       # Pointer drag + keyboard seating, meeting CRUD, presets
-│   └── utils.js        # genId, escHtml, debounce, initials, fmtHours, toast
+│   ├── utils.js        # genId, escHtml, debounce, fmtHours, toast
+│   └── neorgon-*.js    # Vendored kits (header, footer, DOM, persist, workspace)
+├── tests/              # node --test (make test) and workspace-browser.mjs (Playwright)
 ├── CNAME               # loadout.neorgon.com
 ├── robots.txt          # Bot allowances
 └── sitemap.xml         # Single-URL sitemap

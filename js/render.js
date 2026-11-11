@@ -1,22 +1,23 @@
 // ════════════════════════════════════════════════════════════
-//  render.js — Builds week tabs, roster, board, blocks, meters, drawer.
+//  render.js: Builds week tabs, roster, board, blocks, meters, drawer.
 // ════════════════════════════════════════════════════════════
 
 import { state, ui, currentWeekMeetings } from './state.js'
 import { DAYS, MEETING_TYPES, RECURRENCE } from './data.js'
-import { escHtml, initials, fmtHours, clamp } from './utils.js'
+import { escHtml, fmtHours, clamp } from './utils.js'
 import {
   personAvgHours, personHoursInWeek, fillFor, bandFor,
   personMeetingCountInWeek, meetingWeeklyHours, dayHours,
 } from './load.js'
 import { computeInsights } from './insights.js'
 import { cleanColor } from './validate.js'
+import { face } from './team-adapter.js'
 
 // Every interpolated value is escaped, ids and numbers included: state is
 // validated on load, and this is the second wall, not the first.
 const esc = escHtml
 const NEUTRAL = '#94a3b8'
-const colorOf = (p) => cleanColor(p && p.color) || NEUTRAL
+const colorOf = (p) => face(p).color
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 
 export function render() {
@@ -35,17 +36,20 @@ export function renderWeekTabs() {
   bar.innerHTML = state.weeks.map(w => {
     const active = w.id === state.currentWeekId
     const count = state.meetings.filter(m => m.weekId === w.id).length
+    const meetings = `${count} meeting${count === 1 ? '' : 's'}`
     return `
-      <button class="week-tab ${active ? 'week-tab--active' : ''}" data-week="${esc(w.id)}"
-              title="${escHtml(w.label)}: ${count} meeting${count === 1 ? '' : 's'}"
-              aria-pressed="${active}">
-        <span class="week-tab-label" data-rename-week="${esc(w.id)}">${escHtml(w.label)}</span>
-        ${count ? `<span class="week-tab-count">${count}</span>` : ''}
-        ${active && multi ? `<span class="week-tab-x" data-remove-week="${esc(w.id)}" role="button" aria-label="Delete ${escHtml(w.label)}">×</span>` : ''}
-      </button>`
+      <span class="week-tab-wrap">
+        <button type="button" class="week-tab ${active ? 'week-tab--active' : ''}" data-week="${esc(w.id)}"
+                title="${active ? `Rename ${escHtml(w.label)}` : `${escHtml(w.label)}: ${meetings}`}"
+                aria-pressed="${active}" aria-label="${escHtml(w.label)}, ${meetings}${active ? ', current week. Press to rename.' : ''}">
+          <span class="week-tab-label" data-rename-week="${esc(w.id)}">${escHtml(w.label)}</span>
+          ${count ? `<span class="week-tab-count" aria-hidden="true">${count}</span>` : ''}
+        </button>
+        ${active && multi ? `<button type="button" class="week-tab-x" data-remove-week="${esc(w.id)}" aria-label="Delete ${escHtml(w.label)}" title="Delete this week">×</button>` : ''}
+      </span>`
   }).join('') + `
-    <button class="week-add" id="dupWeekBtn" title="Duplicate current week">⧉ Duplicate</button>
-    <button class="week-add" id="addWeekBtn" title="Add a blank week">+ Week</button>`
+    <button type="button" class="week-add" id="dupWeekBtn" title="Copy this week's meetings into a new week">Duplicate week</button>
+    <button type="button" class="week-add" id="addWeekBtn" title="Add a blank week">+ Week</button>`
 }
 
 // ── Roster (left party rail) ─────────────────────────────────
@@ -56,7 +60,14 @@ export function renderRoster() {
   const multi = weeks.length > 1
 
   if (!state.people.length) {
-    list.innerHTML = `<p class="roster-empty">Add your team below, then drag them onto meetings.</p>`
+    list.innerHTML = `
+      <div class="roster-empty">
+        <p>Nobody on the board yet. Type a name below, add your team from Settings, or try the sample to see how load builds up.</p>
+        <div class="empty-actions">
+          <button type="button" class="btn btn--ghost btn--sm" data-empty="sample">Load the sample team</button>
+          <button type="button" class="btn btn--ghost btn--sm" data-empty="settings">Add my team</button>
+        </div>
+      </div>`
     return
   }
 
@@ -78,7 +89,7 @@ export function renderRoster() {
            aria-label="${escHtml(p.name)}, ${multi ? `averaging ${avg.toFixed(1)} hours a week` : `${avg.toFixed(1)} hours`}, ${wkHours.toFixed(1)} this week in ${wkCount} meetings. ${picked ? 'Picked up. Press Enter on a meeting to seat.' : 'Press Enter to pick up.'}"
            title="${escHtml(p.name)}: ${avgLabel}/wk${multi ? ` · this week ${fmtHours(wkHours)}` : ''} across ${wkCount} meeting${wkCount === 1 ? '' : 's'}">
         <span class="chip-ring" style="--ring-deg:${deg}deg; --ring-color:${ringColor}; --class-color:${colorOf(p)}">
-          <span class="chip-avatar" style="--class-color:${colorOf(p)}">${escHtml(initials(p.name))}</span>
+          <span class="chip-avatar" style="--class-color:${colorOf(p)}">${escHtml(face(p).initials)}</span>
         </span>
         <span class="chip-meta">
           <span class="chip-name">${escHtml(p.name)}</span>
@@ -106,7 +117,7 @@ export function renderBoard() {
           <span class="day-total" title="Total attendee-hours booked this day">${fmtHours(dh)}</span>
         </header>
         <div class="day-drop" data-day="${day.id}">
-          ${dayMeetings.map(renderBlock).join('') || `<div class="day-empty">Drop a meeting here</div>`}
+          ${dayMeetings.map(renderBlock).join('') || `<div class="day-empty">Nothing booked on ${day.label} yet.</div>`}
         </div>
         <button class="day-add" data-add-meeting="${day.id}" aria-label="Add meeting to ${day.label}">+ meeting</button>
       </section>`
@@ -120,7 +131,7 @@ function renderBlock(m) {
   const seats = m.attendees.map(id => {
     const p = state.people.find(pp => pp.id === id)
     if (!p) return ''
-    return `<span class="seat" style="--class-color:${colorOf(p)}" title="${escHtml(p.name)}" data-seat="${esc(m.id)}:${esc(p.id)}">${escHtml(initials(p.name))}<button class="seat-x" data-unseat="${esc(m.id)}:${esc(p.id)}" aria-label="Remove ${escHtml(p.name)}">×</button></span>`
+    return `<span class="seat" style="--class-color:${colorOf(p)}" title="${escHtml(p.name)}" data-seat="${esc(m.id)}:${esc(p.id)}">${escHtml(face(p).initials)}<button class="seat-x" data-unseat="${esc(m.id)}:${esc(p.id)}" aria-label="Remove ${escHtml(p.name)}">×</button></span>`
   }).join('')
   const oversized = m.attendees.length > t.cap
   return `
@@ -130,16 +141,16 @@ function renderBlock(m) {
       <span class="block-notch" aria-hidden="true"></span>
       <div class="block-head">
         <span class="block-glyph" aria-hidden="true">${t.glyph}</span>
-        <span class="block-title" data-edit-title="${esc(m.id)}" title="Click to rename">${escHtml(m.title || t.label)}</span>
+        <button type="button" class="block-title" data-edit-title="${esc(m.id)}" title="Rename" aria-label="Rename ${escHtml(m.title || t.label)}">${escHtml(m.title || t.label)}</button>
         <button class="block-x" data-remove-meeting="${esc(m.id)}" aria-label="Delete meeting">×</button>
       </div>
       <div class="block-meta">
-        <button class="chiplet" data-cycle-dur="${esc(m.id)}" title="Click to change duration">${num(m.durationMin)}m</button>
-        <button class="chiplet" data-cycle-rec="${esc(m.id)}" title="Click to change cadence">${rec.short}</button>
+        <button class="chiplet" data-cycle-dur="${esc(m.id)}" title="Change duration" aria-label="Duration ${num(m.durationMin)} minutes. Press to change.">${num(m.durationMin)}m</button>
+        <button class="chiplet" data-cycle-rec="${esc(m.id)}" title="Change cadence" aria-label="Cadence ${escHtml(rec.label)}. Press to change.">${rec.short}</button>
         <span class="chiplet chiplet--ghost" title="Weekly cost per attendee">${fmtHours(perHead)}/head</span>
       </div>
       <div class="block-seats" data-seats="${esc(m.id)}">
-        ${seats || '<span class="seats-empty">drag people here</span>'}
+        ${seats || '<span class="seats-empty">Nobody yet. Drag a teammate here, or pick one and press this meeting.</span>'}
       </div>
       <span class="block-tab" aria-hidden="true"></span>
     </article>`
@@ -172,11 +183,13 @@ export function renderInsights() {
             <div class="insight-detail">${escHtml(i.detail)}</div>
           </div>
         </li>`).join('')
-    : `<li class="insight insight--ok"><div><div class="insight-title">All balanced</div><div class="insight-detail">No overloads, duplicates, or oversized meetings across your planned weeks.</div></div></li>`
+    : !state.people.length || !state.meetings.length
+      ? `<li class="insight insight--ok"><div><div class="insight-title">Nothing to read yet</div><div class="insight-detail">Signals appear once teammates sit in meetings. Add people, add a meeting with + meeting, then seat them.</div></div></li>`
+      : `<li class="insight insight--ok"><div><div class="insight-title">All balanced</div><div class="insight-detail">No overloads, duplicates, or oversized meetings across your planned weeks.</div></div></li>`
 
   list.innerHTML = `
     <div class="bottle-wall" aria-label="Team workload bottles">
-      ${bottles || '<p class="roster-empty">Add people to see their workload.</p>'}
+      ${bottles || '<p class="roster-empty">Each teammate gets a bottle here that fills with their weekly meeting hours.</p>'}
     </div>
     ${state.people.length ? `<p class="wall-caption">${wallLabel} vs ${num(state.settings.thresholdHours)}h threshold</p>` : ''}
     <h3 class="drawer-subhead">Signals</h3>
@@ -197,7 +210,7 @@ function bottleFor(p) {
         <div class="bottle-threshold" aria-hidden="true"></div>
         ${over ? '<div class="bottle-splash" aria-hidden="true"></div>' : ''}
       </div>
-      <span class="bottle-name">${escHtml(initials(p.name))}</span>
+      <span class="bottle-name">${escHtml(face(p).initials)}</span>
     </div>`
 }
 

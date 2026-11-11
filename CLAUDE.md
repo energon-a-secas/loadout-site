@@ -14,32 +14,49 @@ Then open http://localhost:8850. It must be served over HTTP. The app is ES modu
 
 ## Architecture
 
-| Module | Lines | Owns |
-|---|---:|---|
-| `js/events.js` | 412 | `bindEvents` |
-| `js/state.js` | 228 | `STORAGE_KEY`, `state`, `ui`, `addPerson`, `removePerson` |
-| `js/render.js` | 205 | `render`, `renderWeekTabs`, `renderRoster`, `renderBoard`, `renderInsights` |
-| `js/insights.js` | 121 | `computeInsights` |
-| `js/data.js` | 87 | `DAYS`, `RECURRENCE`, `MEETING_TYPES`, `TYPE_ORDER`, `PRESETS` |
-| `js/utils.js` | 79 | `genId`, `clamp`, `escHtml`, `debounce`, `initials` |
-| `js/load.js` | 75 | `meetingWeeklyHours`, `personHoursInWeek`, `personAvgHours`, `personPeakWeek`, `fillFor` |
-| `js/app.js` | 15 | none |
+| Module | Owns |
+|---|---|
+| `js/events.js` | `bindEvents`: drag, click delegation, keyboard, drawer, focus kept across redraws |
+| `js/state.js` | `STORAGE_KEY`, `state`, `ui`, people/weeks/meetings mutations, `loadState`, undo |
+| `js/validate.js` | `cleanState` and the field cleaners: the one gate for stored and imported values |
+| `js/render.js` | `render` and its parts; every interpolated value escaped |
+| `js/settings.js` | `initWorkspace`, `addTeam`, `workspace`: the Neorgon Workspace wiring |
+| `js/team-adapter.js` | `pickTeam`, `planAdd`, `toWorkspace`, `weeklyHours`, `face` (pure) |
+| `js/insights.js` | `computeInsights` |
+| `js/load.js` | the weighted meeting-hours model |
+| `js/data.js` | `DAYS`, `RECURRENCE`, `MEETING_TYPES`, `TYPE_ORDER`, `PRESETS`, `CLASS_COLORS` |
+| `js/utils.js` | `genId`, `clamp`, `escHtml`, `debounce`, `fmtHours`, `showToast`, `$` |
+| `js/app.js` | wiring only |
 
-Vendored from `packages/neorgon-ui/`: never edit in place, run the sync script instead: `js/neorgon-footer.js`, `js/neorgon-header.js`.
+Vendored from `packages/neorgon-ui/`, never edited in place: `js/neorgon-{header,footer,dom,persist}.js`, `js/neorgon-workspace*.js`, `css/neorgon-*.css`. The workspace kit: `packages/neorgon-ui/sync-workspace.sh --to loadout-site`.
 
 ## Data
 
-No persisted state: everything lives in memory for the session.
+Persisted in this browser:
+
+- `localStorage['loadout-v1']`: people (`{ id, name, color, ws? }`, `ws` being the Workspace person id), weeks, meetings, the current week and settings. Read only through `cleanState` (js/validate.js).
+- `localStorage['neo-ws:cache']`, `neo-ws:comma-off`, `sessionStorage['neo-ws:return-hash']`: the Workspace kit's.
+- Cookies `neo_me` (the visitor's settings, shared by every Neorgon tool) and `neo_ws` (a stamp), both written by the kit.
+
+`settings.workHours` is not a preset value: it comes from `neo_me` (working hours times work days, `weeklyHours`), and only the percentage in the overload signal reads it.
+
+## Tests
+
+- `make test`: `node --test tests/*.test.mjs` (validation, escaping, the adapter).
+- `node tests/workspace-browser.mjs [chromium,firefox,webkit]`: Playwright from the monorepo root; starts Loadout on 9370 and neorgon-site (the frame) on 9371 itself. It also maps loadout.neorgon.com and neorgon.com onto those servers in Chromium to check that no analytics script runs while the address carries `neo-ws=`.
 
 ## Conventions
 
 - Zero build step. Plain ES modules loaded by `js/app.js`.
 - Header and footer come from the shared kits. Do not add site-local `.neo-footer` or `.header-bar` CSS.
-- No single JS file over ~500 lines. It currently holds.
+- No single JS file over 500 lines (events.js is the largest, under 470).
 
 ## Gotchas
 
-TODO: the non-obvious failures. What broke here before, what looks wrong but is deliberate, what a reasonable change would break. This is the highest-value section, leave it empty rather than filling it with generic advice.
+- Everything renders through template strings and `innerHTML`. Before 2026-11-11 ids, colours and meeting types went into attributes and styles unescaped and `loadState` trusted localStorage; workspace people are untrusted, so both walls now exist. Keep both: a new field gets a cleaner in `validate.js` and `esc()` in `render.js`.
+- A redraw replaces every control, so `commit()` finds the focused one again by its data attributes. A new control that changes state needs a `data-*` key in `FOCUS_KEYS` (events.js) or keyboard users lose their place.
+- Pressing the current week's tab renames it; that is the keyboard and touch path to rename, not a bug.
+- The Header Kit's analytics run only on `*.neorgon.com`, so the beacon check needs the routed production hosts in the browser test; a plain localhost run proves nothing about it.
 
 ## Do not touch
 

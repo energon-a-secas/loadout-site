@@ -1,9 +1,9 @@
 // ════════════════════════════════════════════════════════════
-//  data.js — Static domain constants
+//  data.js: Static domain constants
 //  Meeting types, presets, recurrence weighting, week days.
 // ════════════════════════════════════════════════════════════
 
-// Week days rendered as board columns (no hours — meeting blocks only).
+// Week days rendered as board columns (no hours: meeting blocks only).
 export const DAYS = [
   { id: 'mon', label: 'Mon' },
   { id: 'tue', label: 'Tue' },

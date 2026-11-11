@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════
-//  insights.js — Pure functions that read state and flag problems.
+//  insights.js: Pure functions that read state and flag problems.
 //  Re-run on every change; rendered in the right-side drawer.
 //
 //  Overload / oversized / duplicate / frequency run PER WEEK, so a spike
@@ -22,7 +22,7 @@ export function computeInsights(state) {
   weeks.forEach(week => {
     const wm = meetings.filter(m => m.weekId === week.id)
 
-    // 1. Overloaded people — over the threshold in THIS week.
+    // 1. Overloaded people: over the threshold in THIS week.
     people.forEach(p => {
       const h = personHoursInWeek(p.id, meetings, week.id)
       if (h > threshold) {
@@ -36,7 +36,7 @@ export function computeInsights(state) {
       }
     })
 
-    // 3. Oversized meetings — attendee count above the type's sane cap.
+    // 3. Oversized meetings: attendee count above the type's sane cap.
     wm.forEach(m => {
       const t = MEETING_TYPES[m.type]
       if (t && m.attendees.length > t.cap) {
@@ -49,7 +49,7 @@ export function computeInsights(state) {
       }
     })
 
-    // 4. Duplicate meetings — same type + same day + overlapping attendees.
+    // 4. Duplicate meetings: same type + same day + overlapping attendees.
     for (let i = 0; i < wm.length; i++) {
       for (let j = i + 1; j < wm.length; j++) {
         const a = wm[i], b = wm[j]
@@ -66,7 +66,7 @@ export function computeInsights(state) {
       }
     }
 
-    // 5. Too frequent — multiple recurring syncs of the same type on one person.
+    // 5. Too frequent: multiple recurring syncs of the same type on one person.
     people.forEach(p => {
       const byType = {}
       wm.forEach(m => {
@@ -86,7 +86,7 @@ export function computeInsights(state) {
     })
   })
 
-  // 2. Under-loaded people — chronically light on AVERAGE (only once meetings exist).
+  // 2. Under-loaded people: chronically light on AVERAGE (only once meetings exist).
   if (meetings.length > 0) {
     people.forEach(p => {
       const avg = personAvgHours(p.id, meetings, weeks)

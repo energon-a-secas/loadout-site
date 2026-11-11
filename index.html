@@ -33,9 +33,9 @@
   <link rel="stylesheet" href="css/neorgon-header.css">
   <link rel="stylesheet" href="css/neorgon-themes.css">
   <link rel="stylesheet" href="https://cdn.neorgon.org/v1.0.0/header/season.css">
-  <script defer src="js/neorgon-header.js"></script>
   <meta name="neo-repo" content="energon-a-secas/loadout-site">
   <link rel="stylesheet" href="css/neorgon-footer.css">
+  <link rel="stylesheet" href="css/neorgon-workspace.css">
   <script defer src="js/neorgon-footer.js"></script>
   <script type="application/ld+json">
   {
@@ -57,7 +57,7 @@
   <div id="toastLive" aria-live="polite" class="sr-only"></div>
 
   <!-- Header: nav + home. Nav holds the reset/sample/signals controls. -->
-  <header class="header-bar" data-header-mode="app">
+  <header class="header-bar" data-header-mode="app" data-header-skin="ember">
     <div class="header-logo">
       <a href="./" class="header-title-link">
         <img src="https://cdn.neorgon.org/v1.0.0/energon-classic-logo.png" class="header-logo-img" alt="">
@@ -70,9 +70,9 @@
     </div>
     <div class="header-right">
       <div class="header-actions">
-        <button class="nav-link" id="sampleBtn" title="Load a demo team">Sample team</button>
-        <button class="nav-link" id="resetBtn" title="Clear the board">Reset</button>
-        <button class="nav-link nav-link--badge" id="insightToggle" data-keep-mobile aria-label="Toggle signals">
+        <button type="button" class="nav-link" id="sampleBtn" title="Load a demo team">Sample team</button>
+        <button type="button" class="nav-link" id="resetBtn" title="Clear the board">Reset</button>
+        <button type="button" class="nav-link nav-link--badge" id="insightToggle" data-keep-mobile aria-expanded="false" aria-controls="insightDrawer">
           Signals
           <span class="insight-badge" id="insightBadge" hidden>0</span>
         </button>
@@ -118,12 +118,13 @@
       <!-- Left: roster / party rail -->
       <aside class="roster" id="roster" aria-label="Team roster">
         <h2 class="roster-head">Your team</h2>
+        <div id="wsBanner" hidden></div>
         <div class="roster-list" id="rosterList"></div>
-        <form class="roster-add" onsubmit="return false">
+        <form class="roster-add" id="addPersonForm">
           <input type="text" id="personName" class="roster-input" placeholder="Add a teammate" maxlength="40" autocomplete="off" aria-label="Teammate name">
-          <button type="button" class="btn btn--primary btn--sm" id="addPersonBtn">Add</button>
+          <button type="submit" class="btn btn--primary btn--sm" id="addPersonBtn">Add</button>
         </form>
-        <p class="roster-tip">Drag a teammate onto a meeting, or click to pick them up then click a meeting.</p>
+        <p class="roster-tip">Drag a teammate onto a meeting, or press them to pick them up and then press a meeting. Settings (,) has your work week and your team.</p>
       </aside>
 
       <!-- Center: Mon–Fri board -->
@@ -148,5 +149,10 @@
   </footer>
 
   <script type="module" src="js/app.js"></script>
+  <!-- The Header Kit runs after app.js on purpose. Deferred and module scripts run in
+       document order, and the kit starts analytics; the Workspace client in app.js must
+       strip a pick's answer (#neo-ws=...) from the address before any beacon can read it.
+       tests/workspace-browser.mjs checks it on the routed production hosts. -->
+  <script defer src="js/neorgon-header.js"></script>
 </body>
 </html>

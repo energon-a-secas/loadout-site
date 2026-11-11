@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════
-//  load.js — Weighted meeting-hours workload model
+//  load.js: Weighted meeting-hours workload model
 //
-//  Load is NOT the number of meetings — it's the weekly HOURS those
+//  Load is NOT the number of meetings: it's the weekly HOURS those
 //  meetings cost, weighted by how often each recurs. Five 15-minute
 //  standups must not outweigh three 60-minute customer calls.
 //
